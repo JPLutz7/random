@@ -155,6 +155,9 @@ def normalize(payload, snapshot_ts):
             "list_price": price,
             "list_price_unit": "GPU Per Hour",
             "usd_per_gpu_hour": per_gpu_hour,
+            # Oracle's per-GPU price is the bare-metal node rate: the CPUs and
+            # RAM of the machine are already inside it.
+            "basis": "machine_inclusive" if chip else "",
             "notes": note,
         })
 

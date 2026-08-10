@@ -12,11 +12,12 @@ day by day.
 import sys
 
 import storage
-from providers import azure, oracle
+from providers import azure, gcp, oracle
 
 PROVIDERS = {
     "oracle": (oracle.fetch, oracle.normalize),
     "azure": (azure.fetch, azure.normalize),
+    "gcp": (gcp.fetch, gcp.normalize),
 }
 
 

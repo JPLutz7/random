@@ -137,6 +137,7 @@
     letter-spacing: .03em; color: var(--text-muted);
     border-bottom: 1px dotted var(--baseline); cursor: help; margin-left: 4px;
   }
+  .flag.info { font-weight: 500; text-transform: none; letter-spacing: 0; }
 
   .note {
     background: var(--surface-1); border: 1px solid var(--border);
@@ -269,6 +270,7 @@ const COLUMNS = [
   { key: "provider_label",   label: "Provider" },
   { key: "price_type_label", label: "Price type" },
   { key: "usd_per_gpu_hour", label: "$ / GPU-hour", num: true },
+  { key: "basis",            label: "Covers" },
   { key: "change",           label: "Change", num: true },
   { key: "list_price",       label: "List price", num: true },
   { key: "gpu_count",        label: "GPUs", num: true },
@@ -320,6 +322,17 @@ function compare(a, b) {
   return String(x).localeCompare(String(y)) * sortDir;
 }
 
+// "Covers" says what the number actually buys. A bare-accelerator price is not
+// comparable to a whole-machine one, so it is labelled rather than left to look
+// like a cheaper version of the same thing.
+function basisCell(r) {
+  if (r.basis === "machine_inclusive")
+    return '<span class="muted" title="vCPU and RAM are included in this price">machine</span>';
+  if (r.basis === "accelerator_only")
+    return '<abbr class="flag" title="Google bills vCPU and RAM separately, so this is the bare chip only — not comparable with Oracle or Azure">chip only</abbr>';
+  return '<span class="blank">—</span>';
+}
+
 function changeCell(r) {
   if (r.change === null || r.change === undefined)
     return '<td class="num blank">—</td>';
@@ -342,14 +355,19 @@ function render() {
 
   document.getElementById("body").innerHTML = rows.map(r => {
     const per = fmtPrice(r.usd_per_gpu_hour);
-    // An extrapolated figure is marked where it is read, not only in a footnote.
-    const flag = r.notes && per
-      ? ' <abbr class="flag" title="' + r.notes + '">extrapolated</abbr>' : "";
+    // Only a genuinely extrapolated figure gets the loud label. Other notes --
+    // such as Google's "accelerator + vCPU + RAM" breakdown -- are useful
+    // detail, not a warning, so they hide behind a quiet marker instead.
+    const flag = !(r.notes && per) ? ""
+      : /extrapolat/i.test(r.notes)
+        ? ' <abbr class="flag" title="' + r.notes + '">extrapolated</abbr>'
+        : ' <abbr class="flag info" title="' + r.notes + '">how</abbr>';
     return "<tr>"
       + "<td>" + (r.chip || '<span class="blank">not identified</span>') + "</td>"
       + "<td>" + r.provider_label + "</td>"
       + "<td>" + r.price_type_label + "</td>"
       + '<td class="num price">' + (per || '<span class="blank">—</span>') + flag + "</td>"
+      + "<td>" + basisCell(r) + "</td>"
       + changeCell(r)
       + '<td class="num">' + (r.list_price === null ? "—" : "$" + r.list_price) + "</td>"
       + '<td class="num muted">' + (r.gpu_count || '<span class="blank">?</span>') + "</td>"
@@ -431,9 +449,13 @@ function drawChart(chip, series) {
   series.forEach(s => {
     const c = colorOf(s.provider);
     const pts = s.points.map(p => [x(times.indexOf(p.ts)), y(p.value)]);
+    // Colour stays with the provider; a dashed line carries the other fact --
+    // that this series measures the bare chip rather than a whole machine.
+    const dash = s.basis === "accelerator_only" ? ' stroke-dasharray="5 3"' : "";
     if (pts.length > 1) {
       svg += '<polyline fill="none" stroke="' + c + '" stroke-width="2" stroke-linejoin="round"'
-           + ' stroke-linecap="round" points="' + pts.map(p => p.join(",")).join(" ") + '"/>';
+           + ' stroke-linecap="round"' + dash + ' points="'
+           + pts.map(p => p.join(",")).join(" ") + '"/>';
     }
     // A 2px surface ring keeps overlapping markers legible.
     pts.forEach(([px, py], i) => {
@@ -492,7 +514,9 @@ function renderCharts() {
   document.getElementById("chartcaption").textContent =
     "One line per provider, showing the cheapest per-GPU-hour that provider lists for "
     + "that chip at the " + (DATA.price_type_labels[type] || type).toLowerCase()
-    + " rate. Hover a point for the machine behind the number.";
+    + " rate. Hover a point for the machine behind the number. A dashed line marked "
+    + "“chip only” is a bare accelerator price with vCPU and RAM billed separately — "
+    + "not comparable with the solid lines.";
   chartHost.innerHTML = "";
   Object.keys(DATA.charts).sort().forEach(chip => {
     const series = DATA.charts[chip][type];

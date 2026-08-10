@@ -110,6 +110,7 @@ def build():
             "list_price": to_float(row["list_price"]),
             "list_price_unit": row["list_price_unit"],
             "usd_per_gpu_hour": price,
+            "basis": row.get("basis", ""),
             "change": change,
             "change_pct": change_pct,
             "notes": row["notes"],
@@ -137,21 +138,30 @@ def build():
     # CHEAPEST per-GPU-hour that provider offers for that chip at that price
     # type -- one line per provider, and the SKU behind it is named in the
     # tooltip so the number stays traceable.
-    best = defaultdict(dict)   # (chip, price_type, provider) -> {ts: (price, sku, region)}
+    # A bare-accelerator price and a whole-machine price are different
+    # measurements, so they are kept as separate lines. Putting Google's
+    # chip-only T4 on the same line as Azure's full-machine T4 would look like
+    # a price comparison and be nothing of the kind.
+    best = defaultdict(dict)   # (chip, price_type, provider, basis) -> {ts: (...)}
     for row in rows:
         price = to_float(row["usd_per_gpu_hour"])
         if price is None or not row["chip_model"]:
             continue
-        bucket = best[(row["chip_model"], row["price_type"], row["provider"])]
+        basis = row.get("basis", "")
+        bucket = best[(row["chip_model"], row["price_type"], row["provider"], basis)]
         current = bucket.get(row["snapshot_ts"])
         if current is None or price < current[0]:
             bucket[row["snapshot_ts"]] = (price, row["sku_name"], row["region"])
 
     charts = defaultdict(lambda: defaultdict(list))
-    for (chip, price_type, provider), by_ts in best.items():
+    for (chip, price_type, provider, basis), by_ts in best.items():
+        label = PROVIDER_LABELS.get(provider, provider)
+        if basis == "accelerator_only":
+            label += " (chip only)"
         charts[chip][price_type].append({
             "provider": provider,
-            "label": PROVIDER_LABELS.get(provider, provider),
+            "label": label,
+            "basis": basis,
             "points": [
                 {"ts": ts, "value": v, "sku": sku, "region": region}
                 for ts, (v, sku, region) in sorted(by_ts.items())

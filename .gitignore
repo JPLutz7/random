@@ -1,2 +1,4 @@
 __pycache__/
 *.pyc
+.gcp_billing_key
+*.key

@@ -1,0 +1,19 @@
+snapshot_ts,provider,provider_last_updated,region,sku_id,sku_name,chip_model,gpu_count,price_type,currency,list_price,list_price_unit,usd_per_gpu_hour,basis,notes
+2026-08-10T23:15:24+00:00,oracle,2026-08-06T15:45:07.573Z,all-commercial,B109479,Compute - GPU - L40S,L40S,1,on_demand,USD,3.5,GPU Per Hour,3.5,machine_inclusive,
+2026-08-10T23:15:24+00:00,oracle,2026-08-06T15:45:07.573Z,all-commercial,B109480,OCI - Compute - GPU - H100T,H100T,1,on_demand,USD,10.75,GPU Per Hour,10.75,machine_inclusive,
+2026-08-10T23:15:24+00:00,oracle,2026-08-06T15:45:07.573Z,all-commercial,B109485,OCI - Compute - GPU - MI300X,MI300X,1,on_demand,USD,6,GPU Per Hour,6,machine_inclusive,
+2026-08-10T23:15:24+00:00,oracle,2026-08-06T15:45:07.573Z,all-commercial,B110519,OCI - Compute - GPU - H200,H200,1,on_demand,USD,10,GPU Per Hour,10,machine_inclusive,
+2026-08-10T23:15:24+00:00,oracle,2026-08-06T15:45:07.573Z,all-commercial,B110978,OCI - Compute - GPU - B200,B200,1,on_demand,USD,14,GPU Per Hour,14,machine_inclusive,
+2026-08-10T23:15:24+00:00,oracle,2026-08-06T15:45:07.573Z,all-commercial,B110979,OCI - Compute - GPU - GB200,GB200,1,on_demand,USD,16,GPU Per Hour,16,machine_inclusive,
+2026-08-10T23:15:24+00:00,oracle,2026-08-06T15:45:07.573Z,all-commercial,B111758,OCI- Compute - GPU - MI355X,MI355X,1,on_demand,USD,8.6,GPU Per Hour,8.6,machine_inclusive,
+2026-08-10T23:15:24+00:00,oracle,2026-08-06T15:45:07.573Z,all-commercial,B112140,OCI - Compute - GPU - GB300,GB300,1,on_demand,USD,18,GPU Per Hour,18,machine_inclusive,
+2026-08-10T23:15:24+00:00,oracle,2026-08-06T15:45:07.573Z,all-commercial,B112237,Oracle Cloud Infrastructure - Compute - GPU - B300,B300,1,on_demand,USD,15,GPU Per Hour,15,machine_inclusive,
+2026-08-10T23:15:24+00:00,oracle,2026-08-06T15:45:07.573Z,all-commercial,B112613,OCI - Compute - GPU - RTX PRO 6000,RTX PRO 6000,1,on_demand,USD,4.5,GPU Per Hour,4.5,machine_inclusive,
+2026-08-10T23:15:24+00:00,oracle,2026-08-06T15:45:07.573Z,all-commercial,B88517,Compute - Bare Metal GPU Standard - X7,,1,on_demand,USD,1.275,GPU Per Hour,,,"chip named by hardware generation, not model -- not mapped"
+2026-08-10T23:15:24+00:00,oracle,2026-08-06T15:45:07.573Z,all-commercial,B88518,Compute - Virtual Machine GPU Standard - X7,,1,on_demand,USD,1.275,GPU Per Hour,,,"chip named by hardware generation, not model -- not mapped"
+2026-08-10T23:15:24+00:00,oracle,2026-08-06T15:45:07.573Z,all-commercial,B89734,Compute - GPU Standard - V2,,1,on_demand,USD,2.95,GPU Per Hour,,,"chip named by hardware generation, not model -- not mapped"
+2026-08-10T23:15:24+00:00,oracle,2026-08-06T15:45:07.573Z,all-commercial,B92740,Compute - GPU - E3,,1,on_demand,USD,3.05,GPU Per Hour,,,"chip named by hardware generation, not model -- not mapped"
+2026-08-10T23:15:24+00:00,oracle,2026-08-06T15:45:07.573Z,all-commercial,B93544,OCI - Compute - GPU - E4,,1,on_demand,USD,3.05,GPU Per Hour,,,"chip named by hardware generation, not model -- not mapped"
+2026-08-10T23:15:24+00:00,oracle,2026-08-06T15:45:07.573Z,all-commercial,B95907,Compute - GPU - A100 - v2,A100,1,on_demand,USD,4,GPU Per Hour,4,machine_inclusive,
+2026-08-10T23:15:24+00:00,oracle,2026-08-06T15:45:07.573Z,all-commercial,B95909,Compute  - GPU - A10,A10,1,on_demand,USD,2,GPU Per Hour,2,machine_inclusive,
+2026-08-10T23:15:24+00:00,oracle,2026-08-06T15:45:07.573Z,all-commercial,B98415,Oracle Cloud Infrastructure - Compute - GPU - H100,H100,1,on_demand,USD,10,GPU Per Hour,10,machine_inclusive,

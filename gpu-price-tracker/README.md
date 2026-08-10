@@ -10,7 +10,7 @@ the reason to run this daily is that a day not collected is a day gone for good.
 AWS is deliberately excluded. Meta publishes no rate card, so there is nothing
 to pull.
 
-Status: **Oracle and Azure are live. Google is not built yet.**
+Status: **All three providers are live.**
 
 ## Running it
 
@@ -55,8 +55,20 @@ Everything is reduced to **US dollars per GPU per hour**, because the three
 providers quote differently — Oracle per GPU, Azure per whole multi-GPU
 machine, Google split across separate accelerator/CPU/RAM line items.
 
-Price type (`on_demand`, `spot`, `1_year`, `3_year`) is its own column and is
-never mixed into one blended number.
+Price type (`on_demand`, `spot`, `1_year`, `3_year`, plus Azure's `5_year` and
+savings-plan rates) is its own column and is never mixed into one blended
+number.
+
+There is a second column that matters just as much, **`basis`**, because the
+providers do not all measure the same thing:
+
+| basis | meaning |
+|---|---|
+| `machine_inclusive` | vCPU and RAM are inside the price — Oracle, Azure, and Google wherever a fixed machine shape exists |
+| `accelerator_only` | the bare chip; Google bills vCPU and RAM separately, so it is **not** comparable to the other two |
+
+The page labels these "machine" and "chip only", and draws chip-only lines
+dashed, so the two can never be compared by accident.
 
 **Where a figure cannot be derived honestly, it is left blank** and the SKU is
 listed on the page. A wrong number that looks plausible is worse than a blank.
@@ -87,6 +99,22 @@ term. `Standard_ND96isr_H100_v5` (8× H100) reads `551221.0` on its 1-year row,
 which at face value is $68,900 per GPU-hour. Amortized over the term it is
 551221 ÷ 8760 ÷ 8 = **$7.87**. Divide by 8760 for 1 year, 26280 for 3 years,
 43800 for 5 years — Azure publishes 5-year terms on some SKUs.
+
+**Google's zero-priced placeholders.** 226 GPU SKUs across all regions carry a
+price of exactly $0.00 — rows like `Reserved Nvidia Tesla A100 GPU in Milan`.
+They are commitment placeholders, not free GPUs. Any row priced at zero is
+dropped.
+
+**Google's RAM unit.** Accelerators and vCPUs are quoted per `h`, but RAM is
+quoted per `GiBy.h`. Accepting only `h` silently discards every RAM rate, which
+makes every machine-inclusive price impossible to assemble — it fails quietly,
+as blanks, rather than loudly.
+
+**Google's spot wording.** Almost every spot GPU price is published as
+`<chip> attached to Spot Preemptible VMs`. Only a handful use the
+`Spot Preemptible <chip>` prefix. Treating the "attached to" form as a duplicate
+removes nearly all of Google's spot pricing. The `usageType` field is what marks
+a row preemptible; the wording is just wording.
 
 **Azure superseded prices.** *(not in the original brief — found while
 building)* The preview API returns retired price rows next to current ones. One
@@ -120,7 +148,37 @@ and rebuild the page.
   so they measure licensing rather than the chip), **DevTestConsumption** (needs
   a special subscription), and **Low Priority** (Azure's deprecated pre-Spot
   tier, which would double-count preemptible pricing).
-- **Google** — not built yet. Needs a free API key.
+- **Google** — needs a free Cloud Billing API key, read from the
+  `GCP_BILLING_KEY` environment variable or `~/.gcp_billing_key`. The key is
+  never written into the repository or into the raw archive. Paginated via
+  `nextPageToken`; `6F81-5844-456A` is the Compute Engine service id. Currently
+  `us-central1`, set by `REGIONS` in `providers/gcp.py`.
+
+  Google itemizes the accelerator separately from the vCPU and RAM it attaches
+  to. Helpfully, that accelerator SKU is *already* quoted per GPU per hour — but
+  taking it at face value is not comparable to Oracle or Azure, which both bake
+  CPU and RAM into what they quote. It reads 12% low on an 8×H100 machine and
+  25% low on a 1×A100 machine. So where Google publishes a fixed machine shape,
+  the comparable figure is assembled:
+
+  ```
+  per GPU-hour = accelerator + (vCPU × core rate + GB × ram rate)
+                               ------------------------------------
+                                        GPUs in the machine
+  ```
+
+  The A2/A3/G2 families have fixed shapes and are assembled. The older chips
+  (T4, P100, P4, V100) attach to flexible N1 machines where the customer picks
+  any CPU and RAM, so there is no canonical machine and no honest bundle to
+  compute — those stay `accelerator_only`. The A4 (B200) line needs no assembly:
+  Google publishes no separate A4 vCPU/RAM SKUs because the "1 gpu slice" price
+  already covers the whole machine.
+
+  Left out on purpose: **DWS Defined Duration** and **Calendar Mode** (Google's
+  scheduled-batch and reserved-block models, which have no counterpart at Oracle
+  or Azure), and **`Reserved …` rows**, many of which are commitment
+  placeholders priced at exactly $0.00 — kept naively they would report an A100
+  as free.
 
 ## Files
 
@@ -132,6 +190,7 @@ and rebuild the page.
 | `storage.py` | where files go, and the columns of a price row |
 | `providers/oracle.py` | the Oracle feed, its filters and its chip lookup |
 | `providers/azure.py` | the Azure feed, its filters and its GPU-count table |
+| `providers/gcp.py` | the Google feed, its filters, chip lookup and machine shapes |
 | `page_template.html` | the page's markup, styling and behaviour |
 
 The page's data is embedded directly inside `docs/index.html` rather than

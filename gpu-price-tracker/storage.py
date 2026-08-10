@@ -42,6 +42,13 @@ COLUMNS = [
     "list_price",             # price exactly as published
     "list_price_unit",        # what that published price is per
     "usd_per_gpu_hour",       # the normalized number -- BLANK if it can't be derived
+    # What that number actually covers. Providers itemize differently:
+    #   machine_inclusive -- vCPU and RAM are part of the price (Oracle, Azure,
+    #                        and Google where a fixed machine shape exists)
+    #   accelerator_only  -- the bare chip; Google bills vCPU and RAM apart from
+    #                        it, so such a row is NOT comparable to the others
+    # Kept as its own field so the page can never compare the two by accident.
+    "basis",
     "notes",
 ]
 

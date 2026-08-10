@@ -280,6 +280,9 @@ def normalize(payload, snapshot_ts):
                         "list_price": round(machine_hour_price, 6),
                         "list_price_unit": "Machine Per Hour",
                         "usd_per_gpu_hour": per_gpu,
+                        # An Azure row is the price of an entire VM, so vCPU and
+                        # RAM are already included before the division.
+                        "basis": "machine_inclusive" if gpu_count else "",
                         "notes": note,
                     })
 
