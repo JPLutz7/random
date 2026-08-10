@@ -1,0 +1,447 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GPU list prices</title>
+<style>
+  :root {
+    color-scheme: light;
+    --page:           #f9f9f7;
+    --surface-1:      #fcfcfb;
+    --text-primary:   #0b0b0b;
+    --text-secondary: #52514e;
+    --text-muted:     #898781;
+    --gridline:       #e1e0d9;
+    --baseline:       #c3c2b7;
+    --border:         rgba(11,11,11,0.10);
+    --up:             #d03b3b;
+    --down:           #006300;
+    --series-1:       #2a78d6;
+    --series-2:       #eb6834;
+    --series-3:       #1baf7a;
+    --series-4:       #eda100;
+    --series-5:       #e87ba4;
+    --series-6:       #008300;
+    --series-7:       #4a3aa7;
+    --series-8:       #e34948;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:where(:not([data-theme="light"])) {
+      color-scheme: dark;
+      --page:           #0d0d0d;
+      --surface-1:      #1a1a19;
+      --text-primary:   #ffffff;
+      --text-secondary: #c3c2b7;
+      --text-muted:     #898781;
+      --gridline:       #2c2c2a;
+      --baseline:       #383835;
+      --border:         rgba(255,255,255,0.10);
+      --up:             #e66767;
+      --down:           #0ca30c;
+      --series-1:       #3987e5;
+      --series-2:       #d95926;
+      --series-3:       #199e70;
+      --series-4:       #c98500;
+      --series-5:       #d55181;
+      --series-6:       #008300;
+      --series-7:       #9085e9;
+      --series-8:       #e66767;
+    }
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --page:           #0d0d0d;
+    --surface-1:      #1a1a19;
+    --text-primary:   #ffffff;
+    --text-secondary: #c3c2b7;
+    --text-muted:     #898781;
+    --gridline:       #2c2c2a;
+    --baseline:       #383835;
+    --border:         rgba(255,255,255,0.10);
+    --up:             #e66767;
+    --down:           #0ca30c;
+    --series-1:       #3987e5;
+    --series-2:       #d95926;
+    --series-3:       #199e70;
+    --series-4:       #c98500;
+    --series-5:       #d55181;
+    --series-6:       #008300;
+    --series-7:       #9085e9;
+    --series-8:       #e66767;
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    padding: 32px 24px 64px;
+    background: var(--page);
+    color: var(--text-primary);
+    font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  .wrap { max-width: 1180px; margin: 0 auto; }
+
+  h1 { font-size: 24px; margin: 0 0 4px; letter-spacing: -0.01em; }
+  h2 { font-size: 17px; margin: 40px 0 12px; }
+  .sub { color: var(--text-secondary); margin: 0 0 20px; font-size: 14px; }
+
+  .stamps {
+    display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 24px;
+    list-style: none; padding: 0;
+  }
+  .stamps li {
+    background: var(--surface-1); border: 1px solid var(--border);
+    border-radius: 8px; padding: 8px 12px; font-size: 13px;
+  }
+  .stamps b { font-weight: 600; }
+  .stamps span { color: var(--text-muted); }
+
+  .filters {
+    display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end;
+    margin-bottom: 16px;
+  }
+  .field { display: flex; flex-direction: column; gap: 4px; }
+  .field label { font-size: 12px; color: var(--text-secondary); }
+  select, input[type=search] {
+    font: inherit; font-size: 14px; padding: 6px 10px;
+    background: var(--surface-1); color: var(--text-primary);
+    border: 1px solid var(--border); border-radius: 8px; min-width: 150px;
+  }
+  .count { margin-left: auto; font-size: 13px; color: var(--text-muted); }
+
+  .tablewrap {
+    overflow-x: auto; background: var(--surface-1);
+    border: 1px solid var(--border); border-radius: 10px;
+  }
+  table { border-collapse: collapse; width: 100%; font-size: 14px; }
+  th, td { padding: 9px 12px; text-align: left; white-space: nowrap; }
+  thead th {
+    position: sticky; top: 0; background: var(--surface-1);
+    border-bottom: 1px solid var(--baseline);
+    font-size: 12px; font-weight: 600; color: var(--text-secondary);
+    cursor: pointer; user-select: none;
+  }
+  thead th:hover { color: var(--text-primary); }
+  thead th .arrow { color: var(--text-muted); font-size: 10px; }
+  tbody tr { border-top: 1px solid var(--gridline); }
+  tbody tr:hover { background: color-mix(in srgb, var(--text-primary) 4%, transparent); }
+  .num { text-align: right; font-variant-numeric: tabular-nums; }
+  .price { font-weight: 600; }
+  .blank { color: var(--text-muted); font-style: italic; }
+  .up { color: var(--up); }
+  .down { color: var(--down); }
+  .muted { color: var(--text-muted); }
+  .sku { color: var(--text-secondary); font-size: 13px; white-space: normal; min-width: 260px; }
+
+  .note {
+    background: var(--surface-1); border: 1px solid var(--border);
+    border-left: 3px solid var(--baseline);
+    border-radius: 8px; padding: 12px 16px; font-size: 13.5px;
+    color: var(--text-secondary); margin: 12px 0;
+  }
+  .note ul { margin: 8px 0 0; padding-left: 20px; }
+
+  .charts { display: grid; gap: 16px; grid-template-columns: repeat(auto-fill, minmax(330px, 1fr)); }
+  .chart {
+    background: var(--surface-1); border: 1px solid var(--border);
+    border-radius: 10px; padding: 14px 14px 8px;
+  }
+  .chart h3 { margin: 0 0 2px; font-size: 15px; }
+  .chart .legend { display: flex; flex-wrap: wrap; gap: 10px; margin: 6px 0 4px; font-size: 12px; color: var(--text-secondary); }
+  .chart .legend i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 5px; vertical-align: -1px; }
+  .chart svg { width: 100%; height: auto; display: block; }
+  .chart .axis { fill: var(--text-muted); font-size: 10px; }
+  .chart .grid { stroke: var(--gridline); stroke-width: 1; }
+  .chart .base { stroke: var(--baseline); stroke-width: 1; }
+  .tip {
+    position: fixed; pointer-events: none; z-index: 10; opacity: 0;
+    transition: opacity .1s; background: var(--surface-1);
+    border: 1px solid var(--border); border-radius: 8px;
+    padding: 8px 10px; font-size: 12.5px; line-height: 1.45;
+    box-shadow: 0 4px 16px rgba(0,0,0,.18); max-width: 260px;
+  }
+  .tip b { font-variant-numeric: tabular-nums; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>GPU list prices</h1>
+  <p class="sub" id="sub"></p>
+  <ul class="stamps" id="stamps"></ul>
+
+  <div class="filters">
+    <div class="field">
+      <label for="f-chip">Chip</label>
+      <select id="f-chip"><option value="">All chips</option></select>
+    </div>
+    <div class="field">
+      <label for="f-type">Price type</label>
+      <select id="f-type"><option value="">All price types</option></select>
+    </div>
+    <div class="field">
+      <label for="f-provider">Provider</label>
+      <select id="f-provider"><option value="">All providers</option></select>
+    </div>
+    <div class="field">
+      <label for="f-search">Search SKU</label>
+      <input type="search" id="f-search" placeholder="e.g. bare metal">
+    </div>
+    <div class="count" id="count"></div>
+  </div>
+
+  <div class="tablewrap">
+    <table>
+      <thead><tr id="head"></tr></thead>
+      <tbody id="body"></tbody>
+    </table>
+  </div>
+
+  <div id="unpriced"></div>
+
+  <h2>Price over time</h2>
+  <div id="chartnote"></div>
+  <div class="charts" id="charts"></div>
+</div>
+
+<div class="tip" id="tip"></div>
+
+<script>
+const DATA = {"generated_at":"2026-08-10T22:41:14+00:00","snapshots":["2026-08-10T22:36:10+00:00"],"latest":"2026-08-10T22:36:10+00:00","previous":null,"provider_last_updated":{"oracle":"2026-08-06T15:45:07.573Z"},"provider_labels":{"oracle":"Oracle","azure":"Azure","gcp":"Google Cloud"},"rows":[{"provider":"oracle","provider_label":"Oracle","chip":"L40S","sku_id":"B109479","sku_name":"Compute - GPU - L40S","region":"all-commercial","price_type":"on_demand","price_type_label":"On-demand","gpu_count":"1","list_price":3.5,"list_price_unit":"GPU Per Hour","usd_per_gpu_hour":3.5,"change":null,"change_pct":null,"notes":"","key":"oracle|B109479|on_demand|all-commercial"},{"provider":"oracle","provider_label":"Oracle","chip":"H100T","sku_id":"B109480","sku_name":"OCI - Compute - GPU - H100T","region":"all-commercial","price_type":"on_demand","price_type_label":"On-demand","gpu_count":"1","list_price":10.75,"list_price_unit":"GPU Per Hour","usd_per_gpu_hour":10.75,"change":null,"change_pct":null,"notes":"","key":"oracle|B109480|on_demand|all-commercial"},{"provider":"oracle","provider_label":"Oracle","chip":"MI300X","sku_id":"B109485","sku_name":"OCI - Compute - GPU - MI300X","region":"all-commercial","price_type":"on_demand","price_type_label":"On-demand","gpu_count":"1","list_price":6.0,"list_price_unit":"GPU Per Hour","usd_per_gpu_hour":6.0,"change":null,"change_pct":null,"notes":"","key":"oracle|B109485|on_demand|all-commercial"},{"provider":"oracle","provider_label":"Oracle","chip":"H200","sku_id":"B110519","sku_name":"OCI - Compute - GPU - H200","region":"all-commercial","price_type":"on_demand","price_type_label":"On-demand","gpu_count":"1","list_price":10.0,"list_price_unit":"GPU Per Hour","usd_per_gpu_hour":10.0,"change":null,"change_pct":null,"notes":"","key":"oracle|B110519|on_demand|all-commercial"},{"provider":"oracle","provider_label":"Oracle","chip":"B200","sku_id":"B110978","sku_name":"OCI - Compute - GPU - B200","region":"all-commercial","price_type":"on_demand","price_type_label":"On-demand","gpu_count":"1","list_price":14.0,"list_price_unit":"GPU Per Hour","usd_per_gpu_hour":14.0,"change":null,"change_pct":null,"notes":"","key":"oracle|B110978|on_demand|all-commercial"},{"provider":"oracle","provider_label":"Oracle","chip":"GB200","sku_id":"B110979","sku_name":"OCI - Compute - GPU - GB200","region":"all-commercial","price_type":"on_demand","price_type_label":"On-demand","gpu_count":"1","list_price":16.0,"list_price_unit":"GPU Per Hour","usd_per_gpu_hour":16.0,"change":null,"change_pct":null,"notes":"","key":"oracle|B110979|on_demand|all-commercial"},{"provider":"oracle","provider_label":"Oracle","chip":"MI355X","sku_id":"B111758","sku_name":"OCI- Compute - GPU - MI355X","region":"all-commercial","price_type":"on_demand","price_type_label":"On-demand","gpu_count":"1","list_price":8.6,"list_price_unit":"GPU Per Hour","usd_per_gpu_hour":8.6,"change":null,"change_pct":null,"notes":"","key":"oracle|B111758|on_demand|all-commercial"},{"provider":"oracle","provider_label":"Oracle","chip":"GB300","sku_id":"B112140","sku_name":"OCI - Compute - GPU - GB300","region":"all-commercial","price_type":"on_demand","price_type_label":"On-demand","gpu_count":"1","list_price":18.0,"list_price_unit":"GPU Per Hour","usd_per_gpu_hour":18.0,"change":null,"change_pct":null,"notes":"","key":"oracle|B112140|on_demand|all-commercial"},{"provider":"oracle","provider_label":"Oracle","chip":"B300","sku_id":"B112237","sku_name":"Oracle Cloud Infrastructure - Compute - GPU - B300","region":"all-commercial","price_type":"on_demand","price_type_label":"On-demand","gpu_count":"1","list_price":15.0,"list_price_unit":"GPU Per Hour","usd_per_gpu_hour":15.0,"change":null,"change_pct":null,"notes":"","key":"oracle|B112237|on_demand|all-commercial"},{"provider":"oracle","provider_label":"Oracle","chip":"RTX PRO 6000","sku_id":"B112613","sku_name":"OCI - Compute - GPU - RTX PRO 6000","region":"all-commercial","price_type":"on_demand","price_type_label":"On-demand","gpu_count":"1","list_price":4.5,"list_price_unit":"GPU Per Hour","usd_per_gpu_hour":4.5,"change":null,"change_pct":null,"notes":"","key":"oracle|B112613|on_demand|all-commercial"},{"provider":"oracle","provider_label":"Oracle","chip":"","sku_id":"B88517","sku_name":"Compute - Bare Metal GPU Standard - X7","region":"all-commercial","price_type":"on_demand","price_type_label":"On-demand","gpu_count":"1","list_price":1.275,"list_price_unit":"GPU Per Hour","usd_per_gpu_hour":null,"change":null,"change_pct":null,"notes":"chip named by hardware generation, not model -- not mapped","key":"oracle|B88517|on_demand|all-commercial"},{"provider":"oracle","provider_label":"Oracle","chip":"","sku_id":"B88518","sku_name":"Compute - Virtual Machine GPU Standard - X7","region":"all-commercial","price_type":"on_demand","price_type_label":"On-demand","gpu_count":"1","list_price":1.275,"list_price_unit":"GPU Per Hour","usd_per_gpu_hour":null,"change":null,"change_pct":null,"notes":"chip named by hardware generation, not model -- not mapped","key":"oracle|B88518|on_demand|all-commercial"},{"provider":"oracle","provider_label":"Oracle","chip":"","sku_id":"B89734","sku_name":"Compute - GPU Standard - V2","region":"all-commercial","price_type":"on_demand","price_type_label":"On-demand","gpu_count":"1","list_price":2.95,"list_price_unit":"GPU Per Hour","usd_per_gpu_hour":null,"change":null,"change_pct":null,"notes":"chip named by hardware generation, not model -- not mapped","key":"oracle|B89734|on_demand|all-commercial"},{"provider":"oracle","provider_label":"Oracle","chip":"","sku_id":"B92740","sku_name":"Compute - GPU - E3","region":"all-commercial","price_type":"on_demand","price_type_label":"On-demand","gpu_count":"1","list_price":3.05,"list_price_unit":"GPU Per Hour","usd_per_gpu_hour":null,"change":null,"change_pct":null,"notes":"chip named by hardware generation, not model -- not mapped","key":"oracle|B92740|on_demand|all-commercial"},{"provider":"oracle","provider_label":"Oracle","chip":"","sku_id":"B93544","sku_name":"OCI - Compute - GPU - E4","region":"all-commercial","price_type":"on_demand","price_type_label":"On-demand","gpu_count":"1","list_price":3.05,"list_price_unit":"GPU Per Hour","usd_per_gpu_hour":null,"change":null,"change_pct":null,"notes":"chip named by hardware generation, not model -- not mapped","key":"oracle|B93544|on_demand|all-commercial"},{"provider":"oracle","provider_label":"Oracle","chip":"A100","sku_id":"B95907","sku_name":"Compute - GPU - A100 - v2","region":"all-commercial","price_type":"on_demand","price_type_label":"On-demand","gpu_count":"1","list_price":4.0,"list_price_unit":"GPU Per Hour","usd_per_gpu_hour":4.0,"change":null,"change_pct":null,"notes":"","key":"oracle|B95907|on_demand|all-commercial"},{"provider":"oracle","provider_label":"Oracle","chip":"A10","sku_id":"B95909","sku_name":"Compute  - GPU - A10","region":"all-commercial","price_type":"on_demand","price_type_label":"On-demand","gpu_count":"1","list_price":2.0,"list_price_unit":"GPU Per Hour","usd_per_gpu_hour":2.0,"change":null,"change_pct":null,"notes":"","key":"oracle|B95909|on_demand|all-commercial"},{"provider":"oracle","provider_label":"Oracle","chip":"H100","sku_id":"B98415","sku_name":"Oracle Cloud Infrastructure - Compute - GPU - H100","region":"all-commercial","price_type":"on_demand","price_type_label":"On-demand","gpu_count":"1","list_price":10.0,"list_price_unit":"GPU Per Hour","usd_per_gpu_hour":10.0,"change":null,"change_pct":null,"notes":"","key":"oracle|B98415|on_demand|all-commercial"}],"unpriced":[{"provider":"oracle","provider_label":"Oracle","chip":"","sku_id":"B88517","sku_name":"Compute - Bare Metal GPU Standard - X7","region":"all-commercial","price_type":"on_demand","price_type_label":"On-demand","gpu_count":"1","list_price":1.275,"list_price_unit":"GPU Per Hour","usd_per_gpu_hour":null,"change":null,"change_pct":null,"notes":"chip named by hardware generation, not model -- not mapped","key":"oracle|B88517|on_demand|all-commercial"},{"provider":"oracle","provider_label":"Oracle","chip":"","sku_id":"B88518","sku_name":"Compute - Virtual Machine GPU Standard - X7","region":"all-commercial","price_type":"on_demand","price_type_label":"On-demand","gpu_count":"1","list_price":1.275,"list_price_unit":"GPU Per Hour","usd_per_gpu_hour":null,"change":null,"change_pct":null,"notes":"chip named by hardware generation, not model -- not mapped","key":"oracle|B88518|on_demand|all-commercial"},{"provider":"oracle","provider_label":"Oracle","chip":"","sku_id":"B89734","sku_name":"Compute - GPU Standard - V2","region":"all-commercial","price_type":"on_demand","price_type_label":"On-demand","gpu_count":"1","list_price":2.95,"list_price_unit":"GPU Per Hour","usd_per_gpu_hour":null,"change":null,"change_pct":null,"notes":"chip named by hardware generation, not model -- not mapped","key":"oracle|B89734|on_demand|all-commercial"},{"provider":"oracle","provider_label":"Oracle","chip":"","sku_id":"B92740","sku_name":"Compute - GPU - E3","region":"all-commercial","price_type":"on_demand","price_type_label":"On-demand","gpu_count":"1","list_price":3.05,"list_price_unit":"GPU Per Hour","usd_per_gpu_hour":null,"change":null,"change_pct":null,"notes":"chip named by hardware generation, not model -- not mapped","key":"oracle|B92740|on_demand|all-commercial"},{"provider":"oracle","provider_label":"Oracle","chip":"","sku_id":"B93544","sku_name":"OCI - Compute - GPU - E4","region":"all-commercial","price_type":"on_demand","price_type_label":"On-demand","gpu_count":"1","list_price":3.05,"list_price_unit":"GPU Per Hour","usd_per_gpu_hour":null,"change":null,"change_pct":null,"notes":"chip named by hardware generation, not model -- not mapped","key":"oracle|B93544|on_demand|all-commercial"}],"charts":{"L40S":[{"label":"Oracle \u00b7 On-demand","provider":"oracle","price_type":"on_demand","points":[{"ts":"2026-08-10T22:36:10+00:00","value":3.5}]}],"H100T":[{"label":"Oracle \u00b7 On-demand","provider":"oracle","price_type":"on_demand","points":[{"ts":"2026-08-10T22:36:10+00:00","value":10.75}]}],"MI300X":[{"label":"Oracle \u00b7 On-demand","provider":"oracle","price_type":"on_demand","points":[{"ts":"2026-08-10T22:36:10+00:00","value":6.0}]}],"H200":[{"label":"Oracle \u00b7 On-demand","provider":"oracle","price_type":"on_demand","points":[{"ts":"2026-08-10T22:36:10+00:00","value":10.0}]}],"B200":[{"label":"Oracle \u00b7 On-demand","provider":"oracle","price_type":"on_demand","points":[{"ts":"2026-08-10T22:36:10+00:00","value":14.0}]}],"GB200":[{"label":"Oracle \u00b7 On-demand","provider":"oracle","price_type":"on_demand","points":[{"ts":"2026-08-10T22:36:10+00:00","value":16.0}]}],"MI355X":[{"label":"Oracle \u00b7 On-demand","provider":"oracle","price_type":"on_demand","points":[{"ts":"2026-08-10T22:36:10+00:00","value":8.6}]}],"GB300":[{"label":"Oracle \u00b7 On-demand","provider":"oracle","price_type":"on_demand","points":[{"ts":"2026-08-10T22:36:10+00:00","value":18.0}]}],"B300":[{"label":"Oracle \u00b7 On-demand","provider":"oracle","price_type":"on_demand","points":[{"ts":"2026-08-10T22:36:10+00:00","value":15.0}]}],"RTX PRO 6000":[{"label":"Oracle \u00b7 On-demand","provider":"oracle","price_type":"on_demand","points":[{"ts":"2026-08-10T22:36:10+00:00","value":4.5}]}],"A100":[{"label":"Oracle \u00b7 On-demand","provider":"oracle","price_type":"on_demand","points":[{"ts":"2026-08-10T22:36:10+00:00","value":4.0}]}],"A10":[{"label":"Oracle \u00b7 On-demand","provider":"oracle","price_type":"on_demand","points":[{"ts":"2026-08-10T22:36:10+00:00","value":2.0}]}],"H100":[{"label":"Oracle \u00b7 On-demand","provider":"oracle","price_type":"on_demand","points":[{"ts":"2026-08-10T22:36:10+00:00","value":10.0}]}]}};
+
+const fmtPrice = v => v === null || v === undefined ? null : "$" + v.toFixed(v < 1 ? 4 : 2);
+const shortDate = ts => (ts || "").slice(0, 10);
+
+/* ---------- header ---------- */
+document.getElementById("sub").textContent =
+  "Snapshot of " + shortDate(DATA.latest) + " · US dollars per GPU per hour · "
+  + DATA.rows.length + " prices"
+  + (DATA.snapshots.length > 1
+      ? " · change shown against " + shortDate(DATA.previous)
+      : " · first snapshot, no history to compare against yet");
+
+const stamps = document.getElementById("stamps");
+stamps.innerHTML = '<li><b>Snapshot taken</b> <span>' + DATA.latest.slice(0,19).replace("T"," ") + ' UTC</span></li>'
+  + Object.entries(DATA.provider_last_updated).map(([p, ts]) =>
+      '<li><b>' + (DATA.provider_labels[p] || p) + ' last updated</b> <span>'
+      + (ts ? ts.replace("T"," ").replace("Z"," UTC") : "not published") + '</span></li>').join("");
+
+/* ---------- filters ---------- */
+const uniq = (key) => [...new Set(DATA.rows.map(r => r[key]).filter(Boolean))].sort();
+function fill(id, values, labelOf) {
+  const sel = document.getElementById(id);
+  values.forEach(v => {
+    const o = document.createElement("option");
+    o.value = v; o.textContent = labelOf ? labelOf(v) : v;
+    sel.appendChild(o);
+  });
+}
+fill("f-chip", uniq("chip"));
+fill("f-type", uniq("price_type"), v => (DATA.rows.find(r => r.price_type === v) || {}).price_type_label || v);
+fill("f-provider", uniq("provider"), v => DATA.provider_labels[v] || v);
+
+/* ---------- table ---------- */
+const COLUMNS = [
+  { key: "chip",             label: "Chip" },
+  { key: "provider_label",   label: "Provider" },
+  { key: "price_type_label", label: "Price type" },
+  { key: "usd_per_gpu_hour", label: "$ / GPU-hour", num: true },
+  { key: "change",           label: "Change", num: true },
+  { key: "list_price",       label: "List price", num: true },
+  { key: "gpu_count",        label: "GPUs", num: true },
+  { key: "region",           label: "Region" },
+  { key: "sku_name",         label: "Provider SKU" },
+];
+
+// Default view: most expensive first, so the headline chips lead.
+let sortKey = "usd_per_gpu_hour", sortDir = -1;
+
+const head = document.getElementById("head");
+COLUMNS.forEach(col => {
+  const th = document.createElement("th");
+  th.dataset.key = col.key;
+  if (col.num) th.className = "num";
+  th.innerHTML = col.label + ' <span class="arrow"></span>';
+  th.addEventListener("click", () => {
+    if (sortKey === col.key) sortDir = -sortDir;
+    else { sortKey = col.key; sortDir = col.num ? -1 : 1; }
+    render();
+  });
+  head.appendChild(th);
+});
+
+function currentRows() {
+  const chip = document.getElementById("f-chip").value;
+  const type = document.getElementById("f-type").value;
+  const prov = document.getElementById("f-provider").value;
+  const q = document.getElementById("f-search").value.trim().toLowerCase();
+  return DATA.rows.filter(r =>
+    (!chip || r.chip === chip) &&
+    (!type || r.price_type === type) &&
+    (!prov || r.provider === prov) &&
+    (!q || (r.sku_name + " " + r.sku_id).toLowerCase().includes(q))
+  );
+}
+
+function compare(a, b) {
+  let x = a[sortKey], y = b[sortKey];
+  // Blanks always sink to the bottom, whichever way the column is sorted.
+  const xb = x === null || x === undefined || x === "";
+  const yb = y === null || y === undefined || y === "";
+  if (xb && yb) return 0;
+  if (xb) return 1;
+  if (yb) return -1;
+  if (typeof x === "number" && typeof y === "number") return (x - y) * sortDir;
+  return String(x).localeCompare(String(y)) * sortDir;
+}
+
+function changeCell(r) {
+  if (r.change === null || r.change === undefined)
+    return '<td class="num blank">—</td>';
+  if (r.change === 0) return '<td class="num muted">no change</td>';
+  const cls = r.change > 0 ? "up" : "down";
+  const sign = r.change > 0 ? "+" : "−";
+  return '<td class="num ' + cls + '">' + sign + "$" + Math.abs(r.change).toFixed(2)
+       + " (" + sign + Math.abs(r.change_pct).toFixed(1) + "%)</td>";
+}
+
+function render() {
+  const rows = currentRows().sort(compare);
+  document.getElementById("count").textContent =
+    rows.length + " of " + DATA.rows.length + " rows";
+
+  head.querySelectorAll("th").forEach(th => {
+    th.querySelector(".arrow").textContent =
+      th.dataset.key === sortKey ? (sortDir === 1 ? "▲" : "▼") : "";
+  });
+
+  document.getElementById("body").innerHTML = rows.map(r => {
+    const per = fmtPrice(r.usd_per_gpu_hour);
+    return "<tr>"
+      + "<td>" + (r.chip || '<span class="blank">not identified</span>') + "</td>"
+      + "<td>" + r.provider_label + "</td>"
+      + "<td>" + r.price_type_label + "</td>"
+      + '<td class="num price">' + (per || '<span class="blank">—</span>') + "</td>"
+      + changeCell(r)
+      + '<td class="num">' + (r.list_price === null ? "—" : "$" + r.list_price) + "</td>"
+      + '<td class="num muted">' + (r.gpu_count || '<span class="blank">?</span>') + "</td>"
+      + '<td class="muted">' + r.region + "</td>"
+      + '<td class="sku">' + r.sku_name + ' <span class="muted">' + r.sku_id + "</span></td>"
+      + "</tr>";
+  }).join("");
+}
+
+["f-chip", "f-type", "f-provider", "f-search"].forEach(id =>
+  document.getElementById(id).addEventListener("input", render));
+render();
+
+/* ---------- SKUs we deliberately left blank ---------- */
+if (DATA.unpriced.length) {
+  document.getElementById("unpriced").innerHTML =
+    '<div class="note"><b>' + DATA.unpriced.length + " priced SKU(s) with no per-GPU-hour figure.</b> "
+    + "Their list price is recorded and archived, but the chip could not be identified from the "
+    + "provider's own naming, so the normalized figure is left blank rather than guessed."
+    + "<ul>" + DATA.unpriced.map(r =>
+        "<li><b>" + r.sku_name + "</b> <span class='muted'>" + r.sku_id + "</span> — $"
+        + r.list_price + " per " + r.list_price_unit.toLowerCase()
+        + (r.notes ? " <span class='muted'>(" + r.notes + ")</span>" : "") + "</li>").join("")
+    + "</ul></div>";
+}
+
+/* ---------- charts ---------- */
+// Color follows the entity, not its rank: the slot is fixed by the series
+// label across the whole page, so filtering never repaints a line.
+const allLabels = [...new Set(Object.values(DATA.charts).flat().map(s => s.label))].sort();
+const colorOf = label => "var(--series-" + ((allLabels.indexOf(label) % 8) + 1) + ")";
+
+const tip = document.getElementById("tip");
+function showTip(html, evt) {
+  tip.innerHTML = html;
+  tip.style.opacity = 1;
+  const pad = 14;
+  let x = evt.clientX + pad, y = evt.clientY + pad;
+  const box = tip.getBoundingClientRect();
+  if (x + box.width > innerWidth - 8) x = evt.clientX - box.width - pad;
+  if (y + box.height > innerHeight - 8) y = evt.clientY - box.height - pad;
+  tip.style.left = x + "px"; tip.style.top = y + "px";
+}
+const hideTip = () => { tip.style.opacity = 0; };
+
+function drawChart(chip, series) {
+  const W = 340, H = 190, L = 48, R = 12, T = 12, B = 26;
+  const times = [...new Set(series.flatMap(s => s.points.map(p => p.ts)))].sort();
+  const values = series.flatMap(s => s.points.map(p => p.value));
+  const lo = Math.min(...values), hi = Math.max(...values);
+  // Always include a sensible band even when every point is identical.
+  const pad = (hi - lo) || Math.max(hi * 0.1, 0.01);
+  const yMin = Math.max(0, lo - pad * 0.25), yMax = hi + pad * 0.25;
+
+  const x = i => times.length === 1
+    ? (L + W - R) / 2
+    : L + (W - L - R) * (i / (times.length - 1));
+  const y = v => T + (H - T - B) * (1 - (v - yMin) / (yMax - yMin || 1));
+
+  let svg = '<svg viewBox="0 0 ' + W + " " + H + '" role="img" aria-label="'
+          + chip + ' price over time">';
+
+  // Recessive gridlines with tabular tick labels.
+  [yMax, (yMax + yMin) / 2, yMin].forEach(v => {
+    svg += '<line class="grid" x1="' + L + '" x2="' + (W - R) + '" y1="' + y(v) + '" y2="' + y(v) + '"/>'
+         + '<text class="axis" x="' + (L - 6) + '" y="' + (y(v) + 3.5) + '" text-anchor="end">$'
+         + v.toFixed(v < 1 ? 3 : 2) + "</text>";
+  });
+  svg += '<line class="base" x1="' + L + '" x2="' + (W - R) + '" y1="' + y(yMin) + '" y2="' + y(yMin) + '"/>';
+
+  [0, times.length - 1].forEach((i, n) => {
+    if (times.length === 1 && n === 1) return;
+    svg += '<text class="axis" x="' + x(i) + '" y="' + (H - 8) + '" text-anchor="'
+         + (times.length === 1 ? "middle" : (n === 0 ? "start" : "end")) + '">'
+         + shortDate(times[i]) + "</text>";
+  });
+
+  series.forEach(s => {
+    const c = colorOf(s.label);
+    const pts = s.points.map(p => [x(times.indexOf(p.ts)), y(p.value)]);
+    if (pts.length > 1) {
+      svg += '<polyline fill="none" stroke="' + c + '" stroke-width="2" stroke-linejoin="round"'
+           + ' stroke-linecap="round" points="' + pts.map(p => p.join(",")).join(" ") + '"/>';
+    }
+    // A 2px surface ring keeps overlapping markers legible.
+    pts.forEach(([px, py], i) => {
+      svg += '<circle cx="' + px + '" cy="' + py + '" r="4" fill="' + c
+           + '" stroke="var(--surface-1)" stroke-width="2"'
+           + ' data-label="' + s.label + '" data-ts="' + s.points[i].ts
+           + '" data-value="' + s.points[i].value + '"/>';
+    });
+  });
+  svg += "</svg>";
+
+  const legend = series.map(s =>
+    '<span><i style="background:' + colorOf(s.label) + '"></i>' + s.label + "</span>").join("");
+
+  const div = document.createElement("div");
+  div.className = "chart";
+  div.innerHTML = "<h3>" + chip + "</h3>"
+                + '<div class="legend">' + legend + "</div>" + svg;
+
+  div.querySelectorAll("circle").forEach(node => {
+    node.addEventListener("mousemove", e => showTip(
+      "<b>" + chip + "</b><br>" + node.dataset.label + "<br>"
+      + shortDate(node.dataset.ts) + " · <b>$"
+      + Number(node.dataset.value).toFixed(2) + "</b> per GPU-hour", e));
+    node.addEventListener("mouseleave", hideTip);
+  });
+  return div;
+}
+
+const chartHost = document.getElementById("charts");
+const chips = Object.keys(DATA.charts).sort();
+document.getElementById("chartnote").innerHTML = DATA.snapshots.length > 1
+  ? ""
+  : '<div class="note">Only one snapshot exists so far, so each chart shows a single '
+    + "point. Run <code>collect.py</code> again on a later day and the lines start to draw "
+    + "themselves — this history is the part that cannot be recovered after the fact.</div>";
+
+chips.forEach(chip => chartHost.appendChild(drawChart(chip, DATA.charts[chip])));
+</script>
+</body>
+</html>
