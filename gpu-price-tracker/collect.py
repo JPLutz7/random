@@ -12,10 +12,11 @@ day by day.
 import sys
 
 import storage
-from providers import oracle
+from providers import azure, oracle
 
 PROVIDERS = {
     "oracle": (oracle.fetch, oracle.normalize),
+    "azure": (azure.fetch, azure.normalize),
 }
 
 
@@ -40,8 +41,11 @@ def collect_one(name, snapshot_ts):
         print(f"[{name}] {len(unmapped)} SKU(s) with no chip mapping "
               f"(price recorded, per-GPU figure left blank):")
         for entry in unmapped:
-            print(f"           {entry['sku_id']:10s} {entry['sku_name']}  "
-                  f"(${entry['list_price']}/GPU/hr)")
+            # No unit is printed here on purpose: the figure is the price as the
+            # provider publishes it, which is per GPU for Oracle but per whole
+            # machine for Azure. Labelling it would be wrong for one of them.
+            print(f"           {entry['sku_id']:38s} ${entry['list_price']}  "
+                  f"{entry['sku_name']}")
 
     return rows
 

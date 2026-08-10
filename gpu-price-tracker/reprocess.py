@@ -22,10 +22,11 @@ import re
 from datetime import datetime, timezone
 
 import storage
-from providers import oracle
+from providers import azure, oracle
 
 NORMALIZERS = {
     "oracle": oracle.normalize,
+    "azure": azure.normalize,
 }
 
 STAMP = re.compile(r"-(\d{4}-\d{2}-\d{2})T(\d{2})-(\d{2})-(\d{2})Z\.json\.gz$")

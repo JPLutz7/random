@@ -132,6 +132,11 @@
   .down { color: var(--down); }
   .muted { color: var(--text-muted); }
   .sku { color: var(--text-secondary); font-size: 13px; white-space: normal; min-width: 260px; }
+  .flag {
+    font-size: 10px; font-weight: 600; text-transform: uppercase;
+    letter-spacing: .03em; color: var(--text-muted);
+    border-bottom: 1px dotted var(--baseline); cursor: help; margin-left: 4px;
+  }
 
   .note {
     background: var(--surface-1); border: 1px solid var(--border);
@@ -183,8 +188,12 @@
       <select id="f-provider"><option value="">All providers</option></select>
     </div>
     <div class="field">
+      <label for="f-region">Region</label>
+      <select id="f-region"><option value="">All regions</option></select>
+    </div>
+    <div class="field">
       <label for="f-search">Search SKU</label>
-      <input type="search" id="f-search" placeholder="e.g. bare metal">
+      <input type="search" id="f-search" placeholder="e.g. H100">
     </div>
     <div class="count" id="count"></div>
   </div>
@@ -199,6 +208,13 @@
   <div id="unpriced"></div>
 
   <h2>Price over time</h2>
+  <div class="filters">
+    <div class="field">
+      <label for="f-charttype">Price type shown in charts</label>
+      <select id="f-charttype"></select>
+    </div>
+  </div>
+  <p class="sub" id="chartcaption"></p>
   <div id="chartnote"></div>
   <div class="charts" id="charts"></div>
 </div>
@@ -215,15 +231,22 @@ const shortDate = ts => (ts || "").slice(0, 10);
 document.getElementById("sub").textContent =
   "Snapshot of " + shortDate(DATA.latest) + " · US dollars per GPU per hour · "
   + DATA.rows.length + " prices"
-  + (DATA.snapshots.length > 1
+  + (DATA.previous
       ? " · change shown against " + shortDate(DATA.previous)
       : " · first snapshot, no history to compare against yet");
 
+// Each provider carries two dates: when we pulled it, and the freshness stamp
+// the provider vouches for itself. They are not the same thing.
 const stamps = document.getElementById("stamps");
-stamps.innerHTML = '<li><b>Snapshot taken</b> <span>' + DATA.latest.slice(0,19).replace("T"," ") + ' UTC</span></li>'
-  + Object.entries(DATA.provider_last_updated).map(([p, ts]) =>
-      '<li><b>' + (DATA.provider_labels[p] || p) + ' last updated</b> <span>'
-      + (ts ? ts.replace("T"," ").replace("Z"," UTC") : "not published") + '</span></li>').join("");
+stamps.innerHTML = Object.keys(DATA.provider_latest).sort().map(p => {
+  const pulled = DATA.provider_latest[p].slice(0, 19).replace("T", " ");
+  const said = DATA.provider_last_updated[p];
+  return '<li><b>' + (DATA.provider_labels[p] || p) + '</b><br>'
+       + '<span>pulled ' + pulled + ' UTC</span><br>'
+       + '<span>provider states ' + (said
+            ? said.slice(0, 19).replace("T", " ") + " UTC"
+            : "no stamp published") + '</span></li>';
+}).join("");
 
 /* ---------- filters ---------- */
 const uniq = (key) => [...new Set(DATA.rows.map(r => r[key]).filter(Boolean))].sort();
@@ -236,8 +259,9 @@ function fill(id, values, labelOf) {
   });
 }
 fill("f-chip", uniq("chip"));
-fill("f-type", uniq("price_type"), v => (DATA.rows.find(r => r.price_type === v) || {}).price_type_label || v);
+fill("f-type", DATA.price_types, v => DATA.price_type_labels[v] || v);
 fill("f-provider", uniq("provider"), v => DATA.provider_labels[v] || v);
+fill("f-region", uniq("region"));
 
 /* ---------- table ---------- */
 const COLUMNS = [
@@ -273,12 +297,14 @@ function currentRows() {
   const chip = document.getElementById("f-chip").value;
   const type = document.getElementById("f-type").value;
   const prov = document.getElementById("f-provider").value;
+  const region = document.getElementById("f-region").value;
   const q = document.getElementById("f-search").value.trim().toLowerCase();
   return DATA.rows.filter(r =>
     (!chip || r.chip === chip) &&
     (!type || r.price_type === type) &&
     (!prov || r.provider === prov) &&
-    (!q || (r.sku_name + " " + r.sku_id).toLowerCase().includes(q))
+    (!region || r.region === region) &&
+    (!q || (r.sku_name + " " + r.sku_id + " " + r.chip).toLowerCase().includes(q))
   );
 }
 
@@ -316,11 +342,14 @@ function render() {
 
   document.getElementById("body").innerHTML = rows.map(r => {
     const per = fmtPrice(r.usd_per_gpu_hour);
+    // An extrapolated figure is marked where it is read, not only in a footnote.
+    const flag = r.notes && per
+      ? ' <abbr class="flag" title="' + r.notes + '">extrapolated</abbr>' : "";
     return "<tr>"
       + "<td>" + (r.chip || '<span class="blank">not identified</span>') + "</td>"
       + "<td>" + r.provider_label + "</td>"
       + "<td>" + r.price_type_label + "</td>"
-      + '<td class="num price">' + (per || '<span class="blank">—</span>') + "</td>"
+      + '<td class="num price">' + (per || '<span class="blank">—</span>') + flag + "</td>"
       + changeCell(r)
       + '<td class="num">' + (r.list_price === null ? "—" : "$" + r.list_price) + "</td>"
       + '<td class="num muted">' + (r.gpu_count || '<span class="blank">?</span>') + "</td>"
@@ -337,21 +366,22 @@ render();
 /* ---------- SKUs we deliberately left blank ---------- */
 if (DATA.unpriced.length) {
   document.getElementById("unpriced").innerHTML =
-    '<div class="note"><b>' + DATA.unpriced.length + " priced SKU(s) with no per-GPU-hour figure.</b> "
-    + "Their list price is recorded and archived, but the chip could not be identified from the "
-    + "provider's own naming, so the normalized figure is left blank rather than guessed."
+    '<div class="note"><b>' + DATA.unpriced.length + " machine(s) with no per-GPU-hour figure.</b> "
+    + "Their list price is recorded and archived, but the chip or the number of chips could not "
+    + "be established from the provider's own data, so the normalized figure is left blank "
+    + "rather than guessed. A wrong number that looks plausible is worse than a blank."
     + "<ul>" + DATA.unpriced.map(r =>
-        "<li><b>" + r.sku_name + "</b> <span class='muted'>" + r.sku_id + "</span> — $"
-        + r.list_price + " per " + r.list_price_unit.toLowerCase()
-        + (r.notes ? " <span class='muted'>(" + r.notes + ")</span>" : "") + "</li>").join("")
+        "<li><b>" + r.sku_id + "</b> <span class='muted'>" + r.provider_label + "</span> — $"
+        + r.list_price + " per " + r.list_price_unit.toLowerCase() + "</li>").join("")
     + "</ul></div>";
 }
 
 /* ---------- charts ---------- */
-// Color follows the entity, not its rank: the slot is fixed by the series
-// label across the whole page, so filtering never repaints a line.
-const allLabels = [...new Set(Object.values(DATA.charts).flat().map(s => s.label))].sort();
-const colorOf = label => "var(--series-" + ((allLabels.indexOf(label) % 8) + 1) + ")";
+// Color follows the entity, never its rank: each provider owns a fixed slot
+// for the life of the page, so changing the price type or dropping a provider
+// never repaints the survivors.
+const PROVIDER_SLOT = { oracle: 1, azure: 2, gcp: 3 };
+const colorOf = provider => "var(--series-" + (PROVIDER_SLOT[provider] || 8) + ")";
 
 const tip = document.getElementById("tip");
 function showTip(html, evt) {
@@ -399,7 +429,7 @@ function drawChart(chip, series) {
   });
 
   series.forEach(s => {
-    const c = colorOf(s.label);
+    const c = colorOf(s.provider);
     const pts = s.points.map(p => [x(times.indexOf(p.ts)), y(p.value)]);
     if (pts.length > 1) {
       svg += '<polyline fill="none" stroke="' + c + '" stroke-width="2" stroke-linejoin="round"'
@@ -407,41 +437,70 @@ function drawChart(chip, series) {
     }
     // A 2px surface ring keeps overlapping markers legible.
     pts.forEach(([px, py], i) => {
+      const p = s.points[i];
       svg += '<circle cx="' + px + '" cy="' + py + '" r="4" fill="' + c
            + '" stroke="var(--surface-1)" stroke-width="2"'
-           + ' data-label="' + s.label + '" data-ts="' + s.points[i].ts
-           + '" data-value="' + s.points[i].value + '"/>';
+           + ' data-label="' + s.label + '" data-ts="' + p.ts
+           + '" data-value="' + p.value + '" data-sku="' + p.sku
+           + '" data-region="' + p.region + '"/>';
     });
   });
   svg += "</svg>";
 
   const legend = series.map(s =>
-    '<span><i style="background:' + colorOf(s.label) + '"></i>' + s.label + "</span>").join("");
+    '<span><i style="background:' + colorOf(s.provider) + '"></i>' + s.label + "</span>").join("");
 
   const div = document.createElement("div");
   div.className = "chart";
   div.innerHTML = "<h3>" + chip + "</h3>"
                 + '<div class="legend">' + legend + "</div>" + svg;
 
+  // The tooltip names the SKU behind the number, so "cheapest" stays traceable.
   div.querySelectorAll("circle").forEach(node => {
     node.addEventListener("mousemove", e => showTip(
-      "<b>" + chip + "</b><br>" + node.dataset.label + "<br>"
+      "<b>" + chip + "</b> · " + node.dataset.label + "<br>"
       + shortDate(node.dataset.ts) + " · <b>$"
-      + Number(node.dataset.value).toFixed(2) + "</b> per GPU-hour", e));
+      + Number(node.dataset.value).toFixed(2) + "</b> per GPU-hour<br>"
+      + '<span class="muted">' + node.dataset.sku + " · " + node.dataset.region + "</span>", e));
     node.addEventListener("mouseleave", hideTip);
   });
   return div;
 }
 
 const chartHost = document.getElementById("charts");
-const chips = Object.keys(DATA.charts).sort();
+
+// Charts are driven by their own price-type control rather than the table
+// filters, so the table can be explored without the charts moving underfoot.
+const chartTypes = DATA.price_types.filter(t =>
+  Object.values(DATA.charts).some(byType => byType[t]));
+const chartSel = document.getElementById("f-charttype");
+chartTypes.forEach(t => {
+  const o = document.createElement("option");
+  o.value = t; o.textContent = DATA.price_type_labels[t] || t;
+  chartSel.appendChild(o);
+});
+chartSel.value = chartTypes.includes("on_demand") ? "on_demand" : chartTypes[0];
+
 document.getElementById("chartnote").innerHTML = DATA.snapshots.length > 1
   ? ""
   : '<div class="note">Only one snapshot exists so far, so each chart shows a single '
     + "point. Run <code>collect.py</code> again on a later day and the lines start to draw "
     + "themselves — this history is the part that cannot be recovered after the fact.</div>";
 
-chips.forEach(chip => chartHost.appendChild(drawChart(chip, DATA.charts[chip])));
+function renderCharts() {
+  const type = chartSel.value;
+  document.getElementById("chartcaption").textContent =
+    "One line per provider, showing the cheapest per-GPU-hour that provider lists for "
+    + "that chip at the " + (DATA.price_type_labels[type] || type).toLowerCase()
+    + " rate. Hover a point for the machine behind the number.";
+  chartHost.innerHTML = "";
+  Object.keys(DATA.charts).sort().forEach(chip => {
+    const series = DATA.charts[chip][type];
+    if (series && series.length) chartHost.appendChild(drawChart(chip, series));
+  });
+}
+chartSel.addEventListener("change", renderCharts);
+renderCharts();
 </script>
 </body>
 </html>
