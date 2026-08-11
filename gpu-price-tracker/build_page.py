@@ -21,6 +21,24 @@ TEMPLATE = Path(__file__).resolve().parent / "page_template.html"
 
 PROVIDER_LABELS = {"oracle": "Oracle", "azure": "Azure", "gcp": "Google Cloud"}
 
+# The region each provider's table opens on, and the only region its chart line
+# is drawn from. Charting the cheapest region available anywhere would make a
+# line jump the day a cheaper region switches on, which is a supply event
+# rather than a price cut -- exactly the confusion this tracker exists to
+# avoid. One fixed region per provider keeps the trend honest; the tables let
+# any other region be inspected. These three are all US regions, so the
+# cross-provider comparison stays like-for-like.
+PRIMARY_REGION = {
+    "oracle": "all-commercial",   # Oracle's price is uniform worldwide
+    # eastus2 rather than eastus: it is the only Azure region carrying all nine
+    # chips we can resolve -- eastus sells neither H200 nor MI300X, so using it
+    # dropped both from the default view and from the charts entirely. Its
+    # cheapest H100 is identical to eastus ($6.98/GPU-hr), so nothing is
+    # flattered by the switch.
+    "azure": "eastus2",
+    "gcp": "us-central1",
+}
+
 PRICE_TYPE_LABELS = {
     "on_demand": "On-demand",
     "spot": "Spot",
@@ -97,15 +115,17 @@ def build():
         change = round(price - prior, 6) if (price is not None and prior is not None) else None
         change_pct = round((price - prior) / prior * 100, 2) if (change is not None and prior) else None
 
+        # Kept deliberately lean: with every region collected this is ~11,000
+        # rows, and anything stored per row is multiplied by that. Labels are
+        # looked up in the browser from the maps below rather than repeated
+        # here, and `key` stays out of the payload since only Python uses it.
         record = {
             "provider": row["provider"],
-            "provider_label": PROVIDER_LABELS.get(row["provider"], row["provider"]),
             "chip": row["chip_model"],
             "sku_id": row["sku_id"],
             "sku_name": row["sku_name"],
             "region": row["region"],
             "price_type": row["price_type"],
-            "price_type_label": PRICE_TYPE_LABELS.get(row["price_type"], row["price_type"]),
             "gpu_count": row["gpu_count"],
             "list_price": to_float(row["list_price"]),
             "list_price_unit": row["list_price_unit"],
@@ -114,7 +134,6 @@ def build():
             "change": change,
             "change_pct": change_pct,
             "notes": row["notes"],
-            "key": key,
         }
         latest_rows.append(record)
 
@@ -123,7 +142,7 @@ def build():
             # seven rows for the same unrecognized machine.
             unpriced.setdefault((row["provider"], row["sku_id"]), {
                 "provider": row["provider"],
-                "provider_label": record["provider_label"],
+                "provider_label": PROVIDER_LABELS.get(row["provider"], row["provider"]),
                 "sku_id": row["sku_id"],
                 "sku_name": row["sku_name"],
                 "list_price": record["list_price"],
@@ -147,6 +166,9 @@ def build():
     for row in rows:
         price = to_float(row["usd_per_gpu_hour"])
         if price is None or not row["chip_model"]:
+            continue
+        # One region per provider -- see PRIMARY_REGION.
+        if row["region"] != PRIMARY_REGION.get(row["provider"]):
             continue
         basis = row.get("basis", "")
         bucket = best[(row["chip_model"], row["price_type"], row["provider"], basis)]
@@ -184,6 +206,8 @@ def build():
     for key in sorted(provider_latest, key=lambda p: PROVIDER_LABELS.get(p, p)):
         own = [r for r in latest_rows if r["provider"] == key]
         priced_rows = [r for r in own if r["usd_per_gpu_hour"] is not None]
+        regions = sorted({r["region"] for r in own})
+        primary = PRIMARY_REGION.get(key)
         provider_blocks.append({
             "key": key,
             "label": PROVIDER_LABELS.get(key, key),
@@ -192,7 +216,10 @@ def build():
             "row_count": len(own),
             "priced_count": len(priced_rows),
             "chips": sorted({r["chip"] for r in priced_rows if r["chip"]}),
-            "regions": sorted({r["region"] for r in own}),
+            "regions": regions,
+            # Each provider names its regions differently, so the selector
+            # belongs to the section rather than the page-wide filter bar.
+            "default_region": primary if primary in regions else (regions[0] if regions else ""),
             "price_types": [t for t in price_types_present
                             if any(r["price_type"] == t for r in own)],
             "unpriced": [u for u in unpriced.values() if u["provider"] == key],
@@ -207,6 +234,7 @@ def build():
         "provider_latest": provider_latest,
         "provider_labels": PROVIDER_LABELS,
         "providers": provider_blocks,
+        "primary_region": PRIMARY_REGION,
         "price_type_labels": PRICE_TYPE_LABELS,
         "price_types": price_types_present,
         "rows": latest_rows,

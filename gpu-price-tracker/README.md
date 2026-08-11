@@ -49,6 +49,29 @@ python3 reprocess.py --write    # apply, then rebuild the page
 Every past day is recomputed from the original bytes. The raw files are never
 modified.
 
+## Coverage
+
+Every region each provider publishes, not a sample:
+
+| | regions collected | prices per snapshot |
+|---|---|---|
+| Azure | 59 | ~7,250 |
+| Google Cloud | 44 | ~3,750 |
+| Oracle | 1 (price is uniform worldwide) | 18 |
+
+**Region matters more than it looks.** The same 8×H100 Azure machine is
+$98.32/hr in `westus3` and $186.61/hr in `southafricawest` — a 90% spread for
+identical hardware. H200 and GB200 spread about 100%. That is far wider than the
+year-over-year drift this tracker exists to detect, so collecting one region
+would have hidden the larger effect completely.
+
+Collecting everything also turned out to be nearly free. Google's API has no
+region parameter — one call always returns all 32,242 Compute Engine SKUs — so
+every region was *already* in the raw archive and was simply being filtered out.
+Widening it cost no extra requests and reprocessed the existing history.
+
+A full run takes about 70 seconds and stores ~3.4 MB, so roughly 1.2 GB a year.
+
 ## The number the page shows
 
 Everything is reduced to **US dollars per GPU per hour**, because the three
@@ -73,9 +96,17 @@ dashed, so the two can never be compared by accident.
 **Where a figure cannot be derived honestly, it is left blank** and the SKU is
 listed on the page. A wrong number that looks plausible is worse than a blank.
 Right now that applies to five older Oracle SKUs named by hardware generation
-("GPU Standard - V2", "GPU - E3") rather than by chip, and to 51 Azure machines
-whose GPU count is not established — the GB200 VM, the new RTX PRO 6000 line,
-plus FPGA, media-accelerator and older graphics SKUs that are not AI parts.
+("GPU Standard - V2", "GPU - E3") rather than by chip, and to Azure machines
+whose GPU count Microsoft does not publish — the `NCads_A10_v4` series (their
+own Q&A confirms the docs lag), the undocumented RTX PRO 6000 sizes, plus FPGA,
+media-accelerator and older graphics SKUs that are not AI parts at all.
+
+GPU counts come from Microsoft's published size tables, cited in
+`providers/azure.py` beside each block. Verifying them added GB200 (4 per VM),
+MI300X (8), the nine documented RTX PRO 6000 sizes, and several H100/H200
+feature-flag variants. Two independent checks fell out of it: Azure and Oracle
+both list MI300X at exactly **$6.00**/GPU-hour, and H200 lands at $10.00
+(Oracle), $10.44 (Google) and $10.60 (Azure).
 
 Some figures are **extrapolated** rather than quoted. The NVadsA10 v5 line sells
 partitioned slices of one A10, so a machine with 1/6 of a GPU divides by 0.1667
@@ -139,10 +170,10 @@ and rebuild the page.
   `PAY_AS_YOU_GO`, so every Oracle row is `on_demand`.
 - **Azure** — no authentication, but paginated; follow `NextPageLink` until it
   is absent. Uses `api-version=2023-01-01-preview` so savings-plan rates come
-  back too. Prices differ by region, so region is part of every row; currently
-  `eastus` only, set by `REGIONS` in `providers/azure.py`. Azure prices the
-  whole machine, so `GPU_COUNT` in that file is the hand-written table that
-  turns a machine price into a per-GPU price.
+  back too. All 59 regions are collected in one paginated query (`REGIONS = None`
+  in `providers/azure.py`; a list of names still works if the volume ever needs
+  limiting). Azure prices the whole machine, so `GPU_COUNT` in that file is the
+  hand-written table that turns a machine price into a per-GPU price.
 
   Left out on purpose: **Windows** rows (they bundle a Windows Server licence,
   so they measure licensing rather than the chip), **DevTestConsumption** (needs
@@ -151,8 +182,9 @@ and rebuild the page.
 - **Google** — needs a free Cloud Billing API key, read from the
   `GCP_BILLING_KEY` environment variable or `~/.gcp_billing_key`. The key is
   never written into the repository or into the raw archive. Paginated via
-  `nextPageToken`; `6F81-5844-456A` is the Compute Engine service id. Currently
-  `us-central1`, set by `REGIONS` in `providers/gcp.py`.
+  `nextPageToken`; `6F81-5844-456A` is the Compute Engine service id. All 44
+  regions are kept (`REGIONS = None` in `providers/gcp.py`) — the API has no
+  region parameter, so every region arrives in one call regardless.
 
   Google itemizes the accelerator separately from the vCPU and RAM it attaches
   to. Helpfully, that accelerator SKU is *already* quoted per GPU per hour — but
@@ -210,6 +242,19 @@ The page is organised by hyperscaler:
    deliberately mixed, because comparing them over time is the point. One line
    per provider per chip, showing the cheapest per-GPU-hour it lists, with its
    own price-type selector.
+
+Each provider's table opens on one region and has its own region picker in the
+section heading — the providers name their regions differently, so a page-wide
+region filter would be meaningless. The charts are pinned to one fixed region
+per provider (`PRIMARY_REGION` in `build_page.py`): Oracle `all-commercial`,
+Azure `eastus2`, Google `us-central1`. Drawing the cheapest region available
+anywhere would make a line jump the day a cheaper region switches on, which is a
+supply event rather than a price cut.
+
+Azure's `eastus2` is used rather than `eastus` because it is the only Azure
+region carrying all nine resolvable chips — `eastus` sells neither H200 nor
+MI300X. Its cheapest H100 is identical to `eastus`, so nothing is flattered by
+the choice.
 
 The filters at the top apply to every section at once, and a provider filtered
 down to nothing is hidden rather than shown empty. Sorting is shared across the

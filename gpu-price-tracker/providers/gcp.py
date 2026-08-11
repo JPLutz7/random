@@ -19,8 +19,14 @@ import requests
 SERVICE_ID = "6F81-5844-456A"
 ENDPOINT = f"https://cloudbilling.googleapis.com/v1/services/{SERVICE_ID}/skus"
 
-# Google prices per region. us-central1 (Iowa) is the default US region.
-REGIONS = ["us-central1"]
+# Google prices per region, and the API has no region parameter -- one call
+# returns every region's SKUs regardless. Filtering to a single region here
+# threw away roughly 97% of what had already been downloaded and archived.
+#
+# Set to None to keep every region. A list of region names still works if the
+# volume ever needs limiting. Because the raw archive always held every region,
+# changing this reprocesses the whole history with no new requests.
+REGIONS = None
 
 KEY_FILE = pathlib.Path.home() / ".gcp_billing_key"
 
@@ -78,10 +84,12 @@ BASIS_ACCELERATOR = "accelerator_only"
 # "Nvidia H100 80GB Plus GPU" is deliberately absent -- it appears on only one
 # SKU, and which product it denotes is not clear from the feed.
 #
-# Google calls its Blackwell workstation part "RTX 6000 96GB". Oracle and Azure
-# both list an "RTX PRO 6000". They are very likely the same silicon, but the
-# feed does not say so, and charting two different chips as one line would be a
-# plausible-looking mistake. It keeps Google's own name until that is confirmed.
+# Google calls its Blackwell part "RTX 6000 96GB"; Oracle lists an "RTX PRO
+# 6000" and Azure an "RTXPRO6000BSE". These are now treated as one chip. The
+# deciding evidence is the memory size: Microsoft's published size table names
+# the part "NVIDIA RTX PRO 6000 Blackwell Server Edition GPU (96 GB)", and the
+# only other RTX 6000 in the line-up -- the Ada generation -- carries 48 GB. So
+# "RTX 6000 96GB" identifies the same silicon rather than an older card.
 ACCELERATORS = {
     # description (region stripped)          chip label        basis if unassembled
     "Nvidia Tesla A100 GPU":                 ("A100",           BASIS_ACCELERATOR),
@@ -96,7 +104,7 @@ ACCELERATORS = {
     "Nvidia Tesla V100 GPU":                 ("V100",           BASIS_ACCELERATOR),
     "Nvidia Tesla P100 GPU":                 ("P100",           BASIS_ACCELERATOR),
     "Nvidia Tesla P4 GPU":                   ("P4",             BASIS_ACCELERATOR),
-    "RTX 6000 96GB":                         ("RTX 6000 96GB",  BASIS_ACCELERATOR),
+    "RTX 6000 96GB":                         ("RTX PRO 6000",   BASIS_ACCELERATOR),
 }
 
 # ---------------------------------------------------------------------------
@@ -289,7 +297,11 @@ def normalize(payload, snapshot_ts):
         base = re.sub(r"\s+attached to .*$", "", base).strip()
 
         entry = ACCELERATORS.get(base)
-        regions = [r for r in sku.get("serviceRegions", []) if r in REGIONS]
+        regions = sku.get("serviceRegions", [])
+        if REGIONS is not None:
+            regions = [r for r in regions if r in REGIONS]
+        # "global" appears on a few SKUs and is not a place you can rent a GPU.
+        regions = [r for r in regions if r != "global"]
         if not regions:
             continue
 

@@ -117,6 +117,8 @@
     font-size: 13px; font-weight: 400; color: var(--text-muted);
   }
   .section.empty { display: none; }
+  .regionpick { font-size: 12px; font-weight: 400; color: var(--text-muted); }
+  .regionpick select { min-width: 0; padding: 3px 6px; font-size: 12px; margin-left: 4px; }
 
   .filters {
     display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end;
@@ -218,10 +220,6 @@
       <select id="f-provider"><option value="">All providers</option></select>
     </div>
     <div class="field">
-      <label for="f-region">Region</label>
-      <select id="f-region"><option value="">All regions</option></select>
-    </div>
-    <div class="field">
       <label for="f-search">Search SKU</label>
       <input type="search" id="f-search" placeholder="e.g. H100">
     </div>
@@ -292,19 +290,17 @@ function fill(id, values, labelOf) {
 fill("f-chip", uniq("chip"));
 fill("f-type", DATA.price_types, v => DATA.price_type_labels[v] || v);
 fill("f-provider", uniq("provider"), v => DATA.provider_labels[v] || v);
-fill("f-region", uniq("region"));
 
 /* ---------- one table per hyperscaler ---------- */
 // No Provider column: the section heading already says whose prices these are.
 const COLUMNS = [
   { key: "chip",             label: "Chip" },
-  { key: "price_type_label", label: "Price type" },
+  { key: "price_type",       label: "Price type" },
   { key: "usd_per_gpu_hour", label: "$ / GPU-hour", num: true },
   { key: "basis",            label: "Covers" },
   { key: "change",           label: "Change", num: true },
   { key: "list_price",       label: "List price", num: true },
   { key: "gpu_count",        label: "GPUs", num: true },
-  { key: "region",           label: "Region" },
   { key: "sku_name",         label: "Provider SKU" },
 ];
 
@@ -316,7 +312,15 @@ let sortKey = "usd_per_gpu_hour", sortDir = -1;
 // way, so the columns stay readable straight down the page.
 document.getElementById("sections").innerHTML = DATA.providers.map(p =>
   '<section class="section" id="sec-' + p.key + '" style="--accent:' + colorOf(p.key) + '">'
-  + '<h2>' + p.label + ' <span class="meta" id="meta-' + p.key + '"></span></h2>'
+  + '<h2>' + p.label + ' <span class="meta" id="meta-' + p.key + '"></span>'
+  + (p.regions.length > 1
+      ? '<label class="regionpick">region '
+        + '<select id="region-' + p.key + '">'
+        + p.regions.map(r => '<option' + (r === p.default_region ? ' selected' : '')
+            + '>' + r + '</option>').join("")
+        + '</select></label>'
+      : "")
+  + '</h2>'
   + '<div class="tablewrap"><table>'
   + '<thead><tr id="head-' + p.key + '"></tr></thead>'
   + '<tbody id="body-' + p.key + '"></tbody></table></div>'
@@ -324,6 +328,8 @@ document.getElementById("sections").innerHTML = DATA.providers.map(p =>
   + '</section>').join("");
 
 DATA.providers.forEach(p => {
+  const pick = document.getElementById("region-" + p.key);
+  if (pick) pick.addEventListener("change", render);
   const head = document.getElementById("head-" + p.key);
   COLUMNS.forEach(col => {
     const th = document.createElement("th");
@@ -343,13 +349,13 @@ function currentRows() {
   const chip = document.getElementById("f-chip").value;
   const type = document.getElementById("f-type").value;
   const prov = document.getElementById("f-provider").value;
-  const region = document.getElementById("f-region").value;
   const q = document.getElementById("f-search").value.trim().toLowerCase();
+  // Region is deliberately NOT here: each provider names its regions
+  // differently, so the selector lives in the section header instead.
   return DATA.rows.filter(r =>
     (!chip || r.chip === chip) &&
     (!type || r.price_type === type) &&
     (!prov || r.provider === prov) &&
-    (!region || r.region === region) &&
     (!q || (r.sku_name + " " + r.sku_id + " " + r.chip).toLowerCase().includes(q))
   );
 }
@@ -398,13 +404,12 @@ function rowHtml(r) {
       : ' <abbr class="flag info" title="' + r.notes + '">how</abbr>';
   return "<tr>"
     + "<td>" + (r.chip || '<span class="blank">not identified</span>') + "</td>"
-    + "<td>" + r.price_type_label + "</td>"
+    + "<td>" + (DATA.price_type_labels[r.price_type] || r.price_type) + "</td>"
     + '<td class="num price">' + (per || '<span class="blank">—</span>') + flag + "</td>"
     + "<td>" + basisCell(r) + "</td>"
     + changeCell(r)
     + '<td class="num">' + (r.list_price === null ? "—" : "$" + r.list_price) + "</td>"
     + '<td class="num muted">' + (r.gpu_count || '<span class="blank">?</span>') + "</td>"
-    + '<td class="muted">' + r.region + "</td>"
     + '<td class="sku">' + r.sku_name + ' <span class="muted">' + r.sku_id + "</span></td>"
     + "</tr>";
 }
@@ -441,7 +446,10 @@ function render() {
     all.length + " of " + DATA.rows.length + " rows";
 
   DATA.providers.forEach(p => {
-    const rows = all.filter(r => r.provider === p.key).sort(compare);
+    const pick = document.getElementById("region-" + p.key);
+    const region = pick ? pick.value : p.default_region;
+    const rows = all.filter(r => r.provider === p.key && r.region === region)
+                    .sort(compare);
     // A provider filtered down to nothing is hidden rather than shown empty.
     document.getElementById("sec-" + p.key).classList.toggle("empty", rows.length === 0);
 
@@ -449,7 +457,7 @@ function render() {
                               .map(r => r.chip));
     document.getElementById("meta-" + p.key).textContent =
       plural(rows.length, "price") + " · " + plural(chips.size, "chip")
-      + " · " + p.regions.join(", ");
+      + " · " + plural(p.regions.length, "region") + " collected";
 
     document.getElementById("head-" + p.key).querySelectorAll("th").forEach(th => {
       th.querySelector(".arrow").textContent =
@@ -461,7 +469,7 @@ function render() {
   });
 }
 
-["f-chip", "f-type", "f-provider", "f-region", "f-search"].forEach(id =>
+["f-chip", "f-type", "f-provider", "f-search"].forEach(id =>
   document.getElementById(id).addEventListener("input", render));
 render();
 
@@ -578,9 +586,13 @@ function renderCharts() {
   document.getElementById("chartcaption").textContent =
     "One line per provider, showing the cheapest per-GPU-hour that provider lists for "
     + "that chip at the " + (DATA.price_type_labels[type] || type).toLowerCase()
-    + " rate. Hover a point for the machine behind the number. A dashed line marked "
-    + "“chip only” is a bare accelerator price with vCPU and RAM billed separately — "
-    + "not comparable with the solid lines.";
+    + " rate. Each provider is drawn from one fixed region ("
+    + Object.entries(DATA.primary_region).map(([k, v]) =>
+        (DATA.provider_labels[k] || k) + " " + v).join(", ")
+    + ") so a line moves only when that region's price moves, not when a cheaper "
+    + "region switches on. Hover a point for the machine behind the number. A dashed "
+    + "line marked “chip only” is a bare accelerator price with vCPU and RAM billed "
+    + "separately — not comparable with the solid lines.";
   chartHost.innerHTML = "";
   Object.keys(DATA.charts).sort().forEach(chip => {
     const series = DATA.charts[chip][type];

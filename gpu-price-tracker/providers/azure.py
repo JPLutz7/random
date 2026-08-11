@@ -18,8 +18,15 @@ import requests
 ENDPOINT = "https://prices.azure.com/api/retail/prices"
 API_VERSION = "2023-01-01-preview"   # savings-plan rates only come back on the preview version
 
-# Azure list prices differ per region, so each region is a separate pull.
-REGIONS = ["eastus"]
+# Azure list prices differ by region -- and by a lot. The same 8x H100 machine
+# is $98.32/hr in westus3 and $186.61/hr in southafricawest, a 90% spread. That
+# is far wider than the year-over-year price drift this tracker exists to
+# detect, so collecting a single region would hide the larger effect entirely.
+#
+# Set to None to collect every region in one paginated query, which is also
+# fewer requests than looping region by region. A list of region names still
+# works if the volume ever needs limiting.
+REGIONS = None
 
 # GPU machines are the N-series. Narrowing server-side keeps the response to a
 # fraction of the full Virtual Machines catalogue.
@@ -99,14 +106,21 @@ def _is_excluded(item):
 # keeps its machine price but gets a BLANK per-GPU figure and is reported as
 # unrecognized -- never a guess.
 #
+# Counts come from Microsoft's published size tables, cited above each block.
+# Where no size table exists, the machine stays out rather than being inferred.
+#
 # Deliberately absent, and why:
-#   Standard_ND128isr_NDR_GB200_v6      -- GB200; per-VM GPU count not confirmed
-#   Standard_NC*_xl_RTXPRO6000BSE_v6    -- new RTX PRO 6000 line; the "ds"/"lds"
-#                                          pairs share vCPU counts, so the GPU
-#                                          count is not derivable from the name
+#   Standard_NC*ads_A10_v4              -- Microsoft publishes no size table for
+#                                          this series (their own Q&A confirms
+#                                          the docs lag), so the count is unknown
+#   Standard_NC{8,16,32,64,128,132,256,264,320,324}*_RTXPRO6000BSE_v6
+#                                       -- priced but absent from the published
+#                                          size table; the documented sizes do
+#                                          not imply a rule these follow
 #   Standard_NP*                        -- Xilinx FPGAs, not GPUs at all
 #   Standard_NM16ads_MA35D              -- media transcoding accelerator, not a GPU
-#   Standard_NV*_v3 / _v4 / _V710_v5    -- M60 / MI25 / Radeon PRO graphics SKUs
+#   Standard_NV*_v2 / _v3 / _v4 / _V710_v5 / _ahs_v4 / NG*_V620
+#                                       -- M60 / MI25 / Radeon PRO graphics SKUs
 #   Standard_N*_Promo                   -- retired promotional K80/M60 SKUs
 #
 # Fractional counts are real: the NVadsA10 v5 line sells partitioned slices of
@@ -145,8 +159,48 @@ GPU_COUNT = {
     "Standard_ND96is_flex_H100_v5": (8, "H100"),
     "Standard_ND96is_noIB_H100_v5": (8, "H100"),
 
-    # --- NVIDIA H200 (absent from eastus; present in other regions) ---
+    # --- NVIDIA H200 ---
     "Standard_ND96isr_H200_v5": (8, "H200"),
+
+    # --- AMD Instinct MI300X ---
+    # learn.microsoft.com/.../gpu-accelerated/ndmi300xv5-series
+    # "Accelerators | 8 GPUs | AMD Instinct MI300X GPU (192GB)"
+    "Standard_ND96isr_MI300X_v5": (8, "MI300X"),
+
+    # --- NVIDIA GB200 ---
+    # learn.microsoft.com/.../gpu-accelerated/nd-gb200-v6-series
+    # "Standard_ND128isr_NDR_GB200_v6 | 4 | 192" in the Accelerators table.
+    "Standard_ND128isr_NDR_GB200_v6": (4, "GB200"),
+
+    # --- NVIDIA RTX PRO 6000 Blackwell Server Edition ---
+    # learn.microsoft.com/.../gpu-accelerated/nc-rtxpro6000-bse-v6-series
+    # The counts are fractional, and the "ds" / "lds" split is General Purpose
+    # versus Compute Optimized (same GPU share, less RAM) -- which is why the
+    # two variants share vCPU counts. Only the nine sizes Microsoft documents
+    # are listed. The price feed also carries NC8lds, NC16lds, NC32, NC64,
+    # NC128, NC132, NC256, NC264, NC320 and NC324 variants that appear in no
+    # published size table, so those stay unmapped rather than extrapolated.
+    "Standard_NC36ds_xl_RTXPRO6000BSE_v6": (1 / 4, "RTX PRO 6000"),
+    "Standard_NC72ds_xl_RTXPRO6000BSE_v6": (1 / 2, "RTX PRO 6000"),
+    "Standard_NC144ds_xl_RTXPRO6000BSE_v6": (1, "RTX PRO 6000"),
+    "Standard_NC288ds_xl_RTXPRO6000BSE_v6": (2, "RTX PRO 6000"),
+    "Standard_NC24lds_xl_RTXPRO6000BSE_v6": (1 / 4, "RTX PRO 6000"),
+    "Standard_NC36lds_xl_RTXPRO6000BSE_v6": (1 / 4, "RTX PRO 6000"),
+    "Standard_NC72lds_xl_RTXPRO6000BSE_v6": (1 / 2, "RTX PRO 6000"),
+    "Standard_NC144lds_xl_RTXPRO6000BSE_v6": (1, "RTX PRO 6000"),
+    "Standard_NC288lds_xl_RTXPRO6000BSE_v6": (2, "RTX PRO 6000"),
+
+    # --- Feature-flag variants of documented sizes ---
+    # These differ from a documented sibling only by a capability suffix -- "f"
+    # for the InfiniBand-less build, "C" for the confidential-computing build.
+    # The vCPU count and family in the name are identical to the documented
+    # size, so the GPU count carries over. This is the same reasoning already
+    # applied to ND96is_flex / ND96is_noIB above.
+    "Standard_ND96isf_H100_v5": (8, "H100"),
+    "Standard_NCC40ads_H100_v5": (1, "H100"),
+    "Standard_ND96isrf_H200_v5": (8, "H200"),
+    "Standard_ND96is_MI300X_v5": (8, "MI300X"),
+    "Standard_ND128isrf_NDR_GB200_v6": (4, "GB200"),
 
     # --- NVIDIA A10, partitioned ---
     "Standard_NV6ads_A10_v5": (1 / 6, "A10"),
@@ -164,35 +218,42 @@ GPU_COUNT = {
 PARTITIONED = {name for name, (count, _) in GPU_COUNT.items() if count < 1}
 
 
+def _pull(region_filter, timeout):
+    """Follow NextPageLink until it is absent, returning the pages verbatim."""
+    clause = f" and armRegionName eq '{region_filter}'" if region_filter else ""
+    params = {
+        "api-version": API_VERSION,
+        "$filter": (
+            f"serviceName eq 'Virtual Machines'"
+            f"{clause}"
+            f" and startswith(armSkuName, '{SKU_PREFIX}')"
+        ),
+    }
+    pages, url = [], ENDPOINT
+    while url:
+        response = requests.get(url, params=params if url == ENDPOINT else None,
+                                timeout=timeout)
+        response.raise_for_status()
+        payload = response.json()
+        pages.append(payload)
+        url = payload.get("NextPageLink")
+        if url:
+            time.sleep(0.2)   # be polite across pages
+    return pages
+
+
 def fetch(timeout=60):
     """
-    Pull every N-series VM price for each region, following NextPageLink.
+    Pull every N-series VM price, following NextPageLink.
 
-    Returns the page payloads exactly as received, keyed by region, so the
-    archive holds the provider's own bytes rather than anything reshaped.
+    Returns the page payloads exactly as received, so the archive holds the
+    provider's own bytes rather than anything reshaped. The key is only a
+    label -- the region of a row is read from the row itself at normalize
+    time, which keeps archives from either collection mode reprocessable.
     """
-    out = {}
-    for region in REGIONS:
-        params = {
-            "api-version": API_VERSION,
-            "$filter": (
-                f"serviceName eq 'Virtual Machines' "
-                f"and armRegionName eq '{region}' "
-                f"and startswith(armSkuName, '{SKU_PREFIX}')"
-            ),
-        }
-        pages, url = [], ENDPOINT
-        while url:
-            response = requests.get(url, params=params if url == ENDPOINT else None,
-                                    timeout=timeout)
-            response.raise_for_status()
-            payload = response.json()
-            pages.append(payload)
-            url = payload.get("NextPageLink")
-            if url:
-                time.sleep(0.2)   # be polite across pages
-        out[region] = pages
-    return out
+    if REGIONS is None:
+        return {"all-regions": _pull(None, timeout)}
+    return {region: _pull(region, timeout) for region in REGIONS}
 
 
 def _price_types(item):
@@ -237,11 +298,16 @@ def normalize(payload, snapshot_ts):
     rows = []
     unmapped = {}
 
-    for region, pages in payload.items():
+    for pages in payload.values():
         for page in pages:
             for item in page.get("Items", []):
                 if _is_excluded(item) or not _is_current(item, now_iso):
                     continue
+
+                # Read the region from the row, not from the archive's key, so
+                # a single all-regions pull and an older per-region archive
+                # both reprocess identically.
+                region = item.get("armRegionName", "")
 
                 arm_name = item.get("armSkuName", "")
                 mapping = GPU_COUNT.get(arm_name)
