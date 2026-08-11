@@ -262,6 +262,7 @@
       <h2 id="detail-title"></h2>
       <p class="sub" id="detail-sub"></p>
       <div class="chart" id="detail-chart"></div>
+      <div id="detail-caveat"></div>
     </div>
   </div>
 
@@ -727,6 +728,30 @@ function render() {
     if (series.length) host.appendChild(drawChart(state.chip, series, true));
     else host.innerHTML = '<p class="muted">No ' + state.chip
        + " prices in " + state.group + " at this price type.</p>";
+
+    // A long flat line is the easiest thing on this page to misread, so the
+    // limits of the reconstruction are stated next to it rather than buried
+    // in a README.
+    const anyStated = series.some(s => s.points.some(p => p.stated));
+    document.getElementById("detail-caveat").innerHTML = !anyStated ? "" :
+      '<details class="note"><summary><b>What the flat stretches mean, and what they do '
+      + 'not.</b> The line before ' + DATA.observed_from + ' is reconstructed from Azure\'s '
+      + 'published price windows, and it is worth knowing exactly how far that goes.</summary>'
+      + "<ul>"
+      + "<li>Azure stamps every price with the date it took effect. A flat stretch is Azure "
+      + "saying <em>this price has been in force since then</em> — it is a claim about the "
+      + "past, not a series of measurements.</li>"
+      + "<li>Azure keeps only the <b>current</b> window and at most <b>one</b> superseded "
+      + "one. So a price change that happened two revisions ago is not published anywhere "
+      + "and cannot be recovered. Flat does not prove nothing ever happened; it means "
+      + "nothing has happened since that start date, and earlier prices are not published."
+      + "</li>"
+      + "<li>The line is the <b>cheapest</b> machine for this chip in this geography. If a "
+      + "dearer machine was repriced and the cheapest was not, the line does not move. The "
+      + "table below shows every machine and the date each of its prices took effect.</li>"
+      + "<li>Only the points from " + DATA.observed_from + " onward were seen by this "
+      + "tracker. Those are the ones nobody can revise.</li>"
+      + "</ul></details>";
   } else {
     detail.classList.add("hidden");
     overview.classList.remove("hidden");

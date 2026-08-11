@@ -13,6 +13,7 @@ double-click-and-it-works file with no server.
 
 import json
 from collections import defaultdict
+from datetime import date, timedelta
 from pathlib import Path
 
 import storage
@@ -315,19 +316,56 @@ def build():
     asof_dates = sorted({start for spans in intervals.values() for start, *_ in spans}
                         | set(observed_days))
 
+    def _month_starts(first, last):
+        year, month = int(first[:4]), int(first[5:7])
+        out = []
+        while True:
+            day = f"{year:04d}-{month:02d}-01"
+            if day > last:
+                return out
+            if day >= first:
+                out.append(day)
+            month += 1
+            if month == 13:
+                year, month = year + 1, 1
+
+    def _sample_dates(first, last):
+        """
+        Dates to read the step function at, so a long range is not drawn from
+        two lonely points. Every sample is a real claim -- "the price in force
+        on this date" -- not an interpolation; the value between two change
+        dates is known exactly, because that is what a price window means.
+
+        The spacing follows the range so the point count stays sane: monthly
+        over years, weekly over months, daily over days.
+        """
+        span_days = (date.fromisoformat(last) - date.fromisoformat(first)).days
+        if span_days <= 0:
+            return [first]
+        if span_days > 400:
+            return _month_starts(first, last)
+        step = 7 if span_days > 60 else 1
+        out, cursor, stop = [], date.fromisoformat(first), date.fromisoformat(last)
+        while cursor <= stop:
+            out.append(cursor.isoformat())
+            cursor += timedelta(days=step)
+        return out
+
     def stated_series(spans):
-        """Cheapest price in force on each as-of date, as a step function."""
+        """The cheapest price in force on each sampled date, as a step function."""
+        starts = sorted({start for start, *_ in spans})
+        first = starts[0]
+        # Change dates are always kept -- they are the corners of the step, and
+        # a sampling grid can step straight over one.
+        dates = sorted(set(_sample_dates(first, today)) | {d for d in starts if d <= today}
+                       | {today})
         points = []
-        for day in asof_dates:
+        for day in dates:
             live = [(v, sku, region) for start, ends, v, sku, region in spans
                     if start <= day <= ends]
             if not live:
                 continue
             value, sku, region = min(live)
-            # Only emit where the value moves; a step function needs its
-            # corners, not a point per candidate date.
-            if points and abs(points[-1][1] - value) < 1e-9:
-                continue
             points.append((day, value, sku, region))
         return points
 
@@ -337,11 +375,6 @@ def build():
         spans = intervals.get(key)
         if spans:
             raw = [(d, v, sku, reg, d not in best[key]) for d, v, sku, reg in stated_series(spans)]
-            # Anchor the line at today so a price unchanged for years still
-            # draws a line rather than a single point in 2023.
-            if raw and raw[-1][0] != today:
-                last = raw[-1]
-                raw.append((today, last[1], last[2], last[3], False))
         else:
             raw = [(d, v, sku, reg, False)
                    for d, (v, sku, reg, _) in sorted(best[key].items())]

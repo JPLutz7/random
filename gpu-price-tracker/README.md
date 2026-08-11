@@ -113,19 +113,62 @@ one this tracker *saw* on the day. The detail chart draws a line where the
 record changes hands. Stated history is not a guess — but it is Azure's word
 rather than a measurement, and it can be revised. Observed history cannot.
 
+Long ranges are **sampled** so they are not drawn from two lonely points:
+monthly over years, weekly over months, daily over days, with every change date
+kept as well. Each sample is a real claim — the price in force on that date —
+not an interpolation, because that is precisely what a price window states.
+
 Lines are drawn as **steps**, because a list price holds until the day it
 changes; sloping between two known prices would draw a gradual drift that never
 happened. A step *down* can mean a price cut **or** a cheaper machine arriving —
 the tooltip names the machine behind every point so the two can be told apart.
 
-### What the reconstructed history says so far
+### How deep the reconstruction goes — and where it stops
 
-Azure retains one superseded period per meter, so it shows both sides of its
-most recent repricing. Across 386 same-SKU/region/price-type changes:
+Azure keeps the **current** price window and **at most one** superseded window.
+Of 5,137 GPU meters:
 
-- **214 decreases, 132 increases, 40 unchanged — median −7.6%**
-- every one of them took effect on **2026-08-01**, a single repricing event
-- for 30 of them it was the first change since **2023-05-01**
+| | count |
+|---|---|
+| only the current window published | 4,751 |
+| one superseded window as well | 386 |
+
+So for most meters we learn the current price and the date it took effect, and
+**nothing at all about what came before**. A price change two revisions ago is
+not published anywhere and cannot be recovered.
+
+This has a consequence worth stating plainly: of the 386 visible changes,
+**every one took effect on 2026-08-01** — not because that was the only
+repricing that ever happened, but because it was the most recent one, and the
+most recent is the only one Azure retains. It is a selection effect, not a
+finding. Across those 386: 214 decreases, 132 increases, 40 unchanged, median
+−7.6%.
+
+The windows do chain contiguously (one ends 2026-07-31, the next begins
+2026-08-01), and start dates demonstrably move when a price changes, so
+"effective from" really does mark the last price change rather than a record
+creation date.
+
+**Why so many lines look flat.** Azure GPU list prices are genuinely sticky.
+Every A100 on-demand price in US East has been unchanged for three to five
+years:
+
+| $/GPU-hour | in force since | machine |
+|---|---|---|
+| $3.3996 | 2021-03-01 | `ND96asr_v4` |
+| $3.6730 | 2022-06-01 | `NC24/48/96ads_A100_v4` |
+| $4.0963 | 2021-12-01 | `ND96amsr_A100_v4` |
+
+That is what the published list price does; discounting happens through
+commitments and negotiated agreements, which is why the spot, reserved and
+savings-plan rows are tracked separately. A flat line means *no change since
+that start date*, not *nothing ever happened*. The detail view says so next to
+the chart.
+
+One more reason a line can look flatter than reality: it plots the **cheapest**
+machine for that chip. If a dearer machine was repriced and the cheapest was
+not, the line does not move. The table under the chart lists every machine with
+the date its price took effect.
 
 ## The number the page shows
 
