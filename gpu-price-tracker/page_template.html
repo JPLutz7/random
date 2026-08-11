@@ -275,6 +275,52 @@
     <div id="chartnote"></div>
     <div class="charts" id="charts"></div>
   </div>
+
+  <h2>Sources</h2>
+  <p class="sub">Every number on this page comes from one of these. Nothing is
+  scraped from a marketing page and nothing is estimated.</p>
+
+  <div class="note">
+    <b>Price feeds — the data itself</b>
+    <ul>
+      <li><b>Oracle</b> — OCI price list API, no authentication:
+        <a href="https://apexapps.oracle.com/pls/apex/cetools/api/v1/products/?currencyCode=USD&amp;serviceCategory=Compute">apexapps.oracle.com/pls/apex/cetools/api/v1/products</a></li>
+      <li><b>Microsoft Azure</b> — Retail Prices API, no authentication,
+        <code>api-version=2023-01-01-preview</code>:
+        <a href="https://prices.azure.com/api/retail/prices">prices.azure.com/api/retail/prices</a>
+        (<a href="https://learn.microsoft.com/en-us/rest/api/cost-management/retail-prices/azure-retail-prices">reference</a>)</li>
+      <li><b>Google Cloud</b> — Cloud Billing Catalog API, service
+        <code>6F81-5844-456A</code> (Compute Engine), free API key:
+        <a href="https://cloud.google.com/billing/docs/reference/rest/v1/services.skus/list">cloud.google.com/billing/docs/reference/rest/v1/services.skus/list</a></li>
+    </ul>
+  </div>
+
+  <details class="note">
+    <summary><b>GPU counts per machine</b> — Azure prices whole machines, so
+    turning a price into dollars-per-GPU needs a chip count, and the price feed
+    does not carry one. Every count below was read from Microsoft's own
+    published size table.</summary>
+    <ul>
+      <li>V100 — <a href="https://learn.microsoft.com/en-us/azure/virtual-machines/sizes/gpu-accelerated/ncv3-series">NCv3</a> (1 / 2 / 4 / 4; retired 2025-09-30 but still priced)</li>
+      <li>T4 — <a href="https://learn.microsoft.com/en-us/azure/virtual-machines/sizes/gpu-accelerated/ncast4v3-series">NCasT4_v3</a> (up to 4)</li>
+      <li>A100 — <a href="https://learn.microsoft.com/en-us/azure/virtual-machines/sizes/gpu-accelerated/nca100v4-series">NC A100 v4</a> (1 / 2 / 4) ·
+        <a href="https://learn.microsoft.com/en-us/azure/virtual-machines/sizes/gpu-accelerated/ndasra100v4-series">NDasrA100 v4</a> (8)</li>
+      <li>H100 — <a href="https://learn.microsoft.com/en-us/azure/virtual-machines/sizes/gpu-accelerated/ncadsh100v5-series">NCads H100 v5</a> (1 / 2) ·
+        <a href="https://learn.microsoft.com/en-us/azure/virtual-machines/sizes/gpu-accelerated/ndh100v5-series">ND H100 v5</a> (8)</li>
+      <li>H200 — <a href="https://learn.microsoft.com/en-us/azure/virtual-machines/sizes/gpu-accelerated/nd-h200-v5-series">ND H200 v5</a> (8)</li>
+      <li>MI300X — <a href="https://learn.microsoft.com/en-us/azure/virtual-machines/sizes/gpu-accelerated/ndmi300xv5-series">ND MI300X v5</a> (8)</li>
+      <li>GB200 — <a href="https://learn.microsoft.com/en-us/azure/virtual-machines/sizes/gpu-accelerated/nd-gb200-v6-series">ND GB200 v6</a> (4 per VM, not 8 — the NVL72 rack is 18 VMs × 4)</li>
+      <li>RTX PRO 6000 — <a href="https://learn.microsoft.com/en-us/azure/virtual-machines/sizes/gpu-accelerated/nc-rtxpro6000-bse-v6-series">NC RTXPRO6000BSE v6</a> (fractional: 1/4, 1/2, 1, 2)</li>
+      <li>A10 — <a href="https://learn.microsoft.com/en-us/azure/virtual-machines/sizes/gpu-accelerated/nvadsa10v5-series">NVadsA10 v5</a> (fractional: 1/6, 1/3, 1/2, 1, 1, 2)</li>
+    </ul>
+    <p><b>Three entries are not backed by a published table</b> and are marked as
+    such in <code>providers/azure.py</code>: <code>ND40s_v2</code> and
+    <code>ND40rs_v2</code> (V100), and the <code>ND96ams</code> /
+    <code>ND96amsr_A100_v4</code> 80&nbsp;GB sizes. They follow the documented
+    sibling in their own series. Microsoft publishes no size table at all for
+    <code>NCads_A10_v4</code>, so those machines are left blank rather than
+    guessed.</p>
+  </details>
 </div>
 
 <div class="tip" id="tip"></div>

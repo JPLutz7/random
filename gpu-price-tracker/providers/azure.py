@@ -125,8 +125,11 @@ def _is_excluded(item):
 # keeps its machine price but gets a BLANK per-GPU figure and is reported as
 # unrecognized -- never a guess.
 #
-# Counts come from Microsoft's published size tables, cited above each block.
+# Counts come from Microsoft's published size tables, linked above each block.
 # Where no size table exists, the machine stays out rather than being inferred.
+# Three entries are marked as NOT verified against a table -- they follow the
+# documented sibling in their own series. They are flagged rather than quietly
+# mixed in with the checked ones.
 #
 # Deliberately absent, and why:
 #   Standard_NC*ads_A10_v4              -- Microsoft publishes no size table for
@@ -147,6 +150,9 @@ def _is_excluded(item):
 # extrapolates a whole-GPU price from a slice -- see PARTITIONED below.
 GPU_COUNT = {
     # --- NVIDIA V100 ---
+    # NCv3: learn.microsoft.com/en-us/azure/virtual-machines/sizes/gpu-accelerated/ncv3-series
+    #       (retired by Microsoft on 2025-09-30, but still priced in the feed)
+    # ND v2 sizes below are NOT verified against a published size table.
     "Standard_NC6s_v3": (1, "V100"),
     "Standard_NC12s_v3": (2, "V100"),
     "Standard_NC24s_v3": (4, "V100"),
@@ -155,12 +161,16 @@ GPU_COUNT = {
     "Standard_ND40rs_v2": (8, "V100"),
 
     # --- NVIDIA T4 ---
+    # NCasT4_v3: learn.microsoft.com/en-us/azure/virtual-machines/sizes/gpu-accelerated/ncast4v3-series
     "Standard_NC4as_T4_v3": (1, "T4"),
     "Standard_NC8as_T4_v3": (1, "T4"),
     "Standard_NC16as_T4_v3": (1, "T4"),
     "Standard_NC64as_T4_v3": (4, "T4"),
 
     # --- NVIDIA A100 ---
+    # NC A100 v4:  .../gpu-accelerated/nca100v4-series      (1 / 2 / 4)
+    # ND A100 v4:  .../gpu-accelerated/ndasra100v4-series   (ND96asr_v4 = 8)
+    # The ND96ams / ND96amsr 80GB sizes are NOT verified against a size table.
     "Standard_NC24ads_A100_v4": (1, "A100"),
     "Standard_NC48ads_A100_v4": (2, "A100"),
     "Standard_NC96ads_A100_v4": (4, "A100"),
@@ -170,6 +180,8 @@ GPU_COUNT = {
     "Standard_ND96amsr_A100_v4": (8, "A100"),
 
     # --- NVIDIA H100 ---
+    # NCads H100 v5: .../gpu-accelerated/ncadsh100v5-series  (1 / 2)
+    # ND H100 v5:    .../gpu-accelerated/ndh100v5-series     (ND96isr_H100_v5 = 8)
     "Standard_NC40ads_H100_v5": (1, "H100"),
     "Standard_NC80adis_H100_v5": (2, "H100"),
     "Standard_ND96is_H100_v5": (8, "H100"),
@@ -179,6 +191,7 @@ GPU_COUNT = {
     "Standard_ND96is_noIB_H100_v5": (8, "H100"),
 
     # --- NVIDIA H200 ---
+    # .../gpu-accelerated/nd-h200-v5-series  (ND96isr_H200_v5 = 8)
     "Standard_ND96isr_H200_v5": (8, "H200"),
 
     # --- AMD Instinct MI300X ---
@@ -222,6 +235,7 @@ GPU_COUNT = {
     "Standard_ND128isrf_NDR_GB200_v6": (4, "GB200"),
 
     # --- NVIDIA A10, partitioned ---
+    # .../gpu-accelerated/nvadsa10v5-series  (1/6, 1/3, 1/2, 1, 1, 2)
     "Standard_NV6ads_A10_v5": (1 / 6, "A10"),
     "Standard_NV12ads_A10_v5": (1 / 3, "A10"),
     "Standard_NV18ads_A10_v5": (1 / 2, "A10"),

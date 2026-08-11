@@ -376,3 +376,43 @@ The page's data is embedded directly inside `docs/index.html` rather than
 loaded from a separate file, because browsers block a local page from reading
 another local file. Embedding is what lets it work by double-clicking, with no
 server.
+
+## Sources
+
+Everything on the page comes from one of these. Nothing is scraped from a
+marketing page and nothing is estimated.
+
+### Price feeds — the data itself
+
+| Provider | Endpoint | Auth |
+|---|---|---|
+| Oracle | [`apexapps.oracle.com/pls/apex/cetools/api/v1/products`](https://apexapps.oracle.com/pls/apex/cetools/api/v1/products/?currencyCode=USD&serviceCategory=Compute) | none |
+| Microsoft Azure | [`prices.azure.com/api/retail/prices`](https://prices.azure.com/api/retail/prices) — [API reference](https://learn.microsoft.com/en-us/rest/api/cost-management/retail-prices/azure-retail-prices) | none |
+| Google Cloud | [Cloud Billing Catalog API](https://cloud.google.com/billing/docs/reference/rest/v1/services.skus/list), service `6F81-5844-456A` | free API key |
+
+### GPU counts per machine
+
+Azure prices whole machines, so a per-GPU figure needs a chip count — and the
+price feed does not carry one. Each count below was read from Microsoft's own
+published size table and is cited in `providers/azure.py` beside the entry.
+
+| chip | size table | counts |
+|---|---|---|
+| V100 | [NCv3](https://learn.microsoft.com/en-us/azure/virtual-machines/sizes/gpu-accelerated/ncv3-series) | 1 / 2 / 4 / 4 (retired 2025-09-30, still priced) |
+| T4 | [NCasT4_v3](https://learn.microsoft.com/en-us/azure/virtual-machines/sizes/gpu-accelerated/ncast4v3-series) | up to 4 |
+| A100 | [NC A100 v4](https://learn.microsoft.com/en-us/azure/virtual-machines/sizes/gpu-accelerated/nca100v4-series) · [NDasrA100 v4](https://learn.microsoft.com/en-us/azure/virtual-machines/sizes/gpu-accelerated/ndasra100v4-series) | 1 / 2 / 4 · 8 |
+| H100 | [NCads H100 v5](https://learn.microsoft.com/en-us/azure/virtual-machines/sizes/gpu-accelerated/ncadsh100v5-series) · [ND H100 v5](https://learn.microsoft.com/en-us/azure/virtual-machines/sizes/gpu-accelerated/ndh100v5-series) | 1 / 2 · 8 |
+| H200 | [ND H200 v5](https://learn.microsoft.com/en-us/azure/virtual-machines/sizes/gpu-accelerated/nd-h200-v5-series) | 8 |
+| MI300X | [ND MI300X v5](https://learn.microsoft.com/en-us/azure/virtual-machines/sizes/gpu-accelerated/ndmi300xv5-series) | 8 |
+| GB200 | [ND GB200 v6](https://learn.microsoft.com/en-us/azure/virtual-machines/sizes/gpu-accelerated/nd-gb200-v6-series) | **4 per VM** — the NVL72 rack is 18 VMs × 4 |
+| RTX PRO 6000 | [NC RTXPRO6000BSE v6](https://learn.microsoft.com/en-us/azure/virtual-machines/sizes/gpu-accelerated/nc-rtxpro6000-bse-v6-series) | 1/4, 1/2, 1, 2 |
+| A10 | [NVadsA10 v5](https://learn.microsoft.com/en-us/azure/virtual-machines/sizes/gpu-accelerated/nvadsa10v5-series) | 1/6, 1/3, 1/2, 1, 1, 2 |
+
+**Three entries are not backed by a published size table** and are marked as
+such in the code: `ND40s_v2` and `ND40rs_v2` (V100), and the `ND96ams` /
+`ND96amsr_A100_v4` 80 GB sizes. Each follows the documented sibling in its own
+series. Microsoft publishes no size table at all for `NCads_A10_v4` — their
+[own Q&A](https://learn.microsoft.com/en-sg/answers/questions/1660072/i-would-like-to-get-information-about-ncadsa10-v4)
+confirms the docs lag — so those machines are left blank rather than guessed.
+
+Google and Oracle need no such table: both quote per GPU already.
