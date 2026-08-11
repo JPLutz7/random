@@ -150,6 +150,11 @@ def build():
     # in the last few minutes" rather than since yesterday.
     provider_day_ts = defaultdict(dict)     # provider -> {date: chosen snapshot_ts}
     for row in rows:
+        # A blank snapshot_ts marks stated history -- the provider's account of
+        # a past price, not a day this tracker ran. It contributes validity
+        # windows further down, but it must never count as an observation.
+        if not row["snapshot_ts"]:
+            continue
         day = row["snapshot_ts"][:10]
         chosen = provider_day_ts[row["provider"]].get(day)
         if chosen is None or row["snapshot_ts"] > chosen:
@@ -170,6 +175,8 @@ def build():
     # Price history per series, used for the change column.
     history = defaultdict(dict)
     for row in rows:
+        if not row["snapshot_ts"]:
+            continue
         price = to_float(row["usd_per_gpu_hour"])
         if price is not None:
             history[series_key(row)][row["snapshot_ts"]] = price
@@ -185,7 +192,7 @@ def build():
         return not ends or ends >= on_day
 
     for row in rows:
-        if row["snapshot_ts"] != provider_latest[row["provider"]]:
+        if row["snapshot_ts"] != provider_latest.get(row["provider"]):
             continue
         # Superseded rows are kept in the archive for their history, but a
         # retired price is not today's price, so the tables skip them.
@@ -292,16 +299,19 @@ def build():
             continue
 
         starts = row.get("effective_from", "")
-        if starts and row["snapshot_ts"] == provider_latest[row["provider"]]:
-            # Stated history. Taken from the newest pull only -- it already
-            # contains every window the provider still publishes, so older
-            # pulls would just repeat it.
+        # Stated history comes from two places: Azure's superseded windows in
+        # the newest pull, and Google's month-by-month backfill, which carries
+        # a blank snapshot_ts. Older daily pulls are skipped because the newest
+        # one already contains every window the provider still publishes.
+        is_stated = starts and (not row["snapshot_ts"]
+                                or row["snapshot_ts"] == provider_latest.get(row["provider"]))
+        if is_stated:
             ends = row.get("effective_to", "") or "9999-12-31"
             for key in chart_keys(row, group):
                 intervals[key].append((starts, ends, price, row["sku_name"], row["region"]))
 
         # Observed history, from the day's winning run, current prices only.
-        if row["snapshot_ts"] in kept_ts:
+        if row["snapshot_ts"] and row["snapshot_ts"] in kept_ts:
             day = row["snapshot_ts"][:10]
             if in_force(row, day):
                 for key in chart_keys(row, group):

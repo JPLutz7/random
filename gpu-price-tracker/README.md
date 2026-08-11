@@ -81,8 +81,8 @@ Two different things, and the page keeps them apart:
 
 | | source | reaches back to |
 |---|---|---|
-| **Azure** | **stated by Azure in its own feed** | **2018-09-04** |
-| Google Cloud | observed by this tracker | the day you started |
+| **Azure** | stated in its own feed | **2018-09-04** |
+| **Google Cloud** | stated, month by month via `backfill_gcp.py` | **2017-01** (retention limit) |
 | Oracle | observed by this tracker | the day you started |
 
 **Azure publishes its own price history and it is easy to miss.** Every row
@@ -100,12 +100,35 @@ How far back each chip reaches, in Azure's US East:
 | A100 | 2021-03-01 | | MI300X | 2025-10-01 |
 | A10 | 2022-04-01 | | RTX PRO 6000 | 2026-04-01 |
 
-**Google and Oracle genuinely publish nothing.** Google's `effectiveTime` reads
-today's date on all 32,242 SKUs and Oracle has a single feed-level
-`lastUpdated`; both mean "when we recomputed this", not "when this price took
-effect". Treating either as a validity date would invent a price change on the
-day you happened to look, so both are left blank and their history starts when
-you start collecting.
+**Google publishes more history than Azure, and it is easy to miss entirely.**
+The plain call reports `effectiveTime` as today's date on all 32,242 SKUs, which
+looks exactly like "no history published" — and that is what this tracker
+concluded at first, wrongly. But `services.skus.list` accepts `startTime` and
+`endTime`, and with them it returns every pricing **version** in force during
+that window instead of only the latest. `backfill_gcp.py` walks month by month:
+
+```
+python3 backfill_gcp.py --from 2024-01           # preview
+python3 backfill_gcp.py --from 2024-01 --write   # fetch and store
+```
+
+Two constraints, both from Google's docs and both confirmed by trying:
+
+* the window must sit inside **one calendar month in America/Los_Angeles**. A
+  window of `2026-07-01T00:00Z` to `2026-07-31T23:59Z` is rejected, because
+  midnight UTC on 1 July is 17:00 on 30 June in Los Angeles. The script holds
+  its boundaries an hour clear of both month ends so daylight saving cannot
+  push them over the line — getting this wrong silently lost both Octobers.
+* timestamps cannot be in the future, so the current month stops at *now*.
+
+History reaches back to at least **January 2017**; January 2016 is refused.
+Unlike Azure, Google returns **every** version in a month, not just the latest —
+so its history has no depth limit within the range collected.
+
+**Oracle genuinely publishes nothing.** One feed-level `lastUpdated`, meaning
+"when we recomputed this" rather than "when this price took effect". Treating it
+as a validity date would invent a price change on the day you happened to look,
+so it is left blank and Oracle's history starts when you start collecting.
 
 **Stated is not the same as observed**, and the page never blurs them. A hollow
 marker is a price the provider *says* applied on that date; a filled marker is
@@ -122,6 +145,24 @@ Lines are drawn as **steps**, because a list price holds until the day it
 changes; sloping between two known prices would draw a gradual drift that never
 happened. A step *down* can mean a price cut **or** a cheaper machine arriving —
 the tooltip names the machine behind every point so the two can be told apart.
+
+### What the history shows
+
+The clearest result so far, from Google's own published versions in US East:
+
+| chip | on-demand, 2024-01 → now | spot, peak → now |
+|---|---|---|
+| H100 | $10.9791 → $10.9791 — **unchanged** | $7.74 → $1.98 → $5.18 (**−33%** off peak) |
+| A100 | $3.4837 → $3.4837 — **unchanged** | $1.10 → $1.53 |
+| L4 | $0.7045 → $0.7045 — **unchanged** | $0.224 → **$0.072 (−70%)** |
+| T4 | $0.3500 → $0.3500 — **unchanged** | $0.110 → **$0.033 (−70%)** |
+
+**On-demand list prices have not moved at all in two and a half years. Spot
+prices have moved constantly** — L4 and T4 spot are down 70% from their peak,
+and H100 spot fell 74% before more than doubling back.
+
+If the question is whether GPU prices are falling, the on-demand rate card is
+close to useless for answering it and the spot series is where the signal lives.
 
 ### How deep the reconstruction goes — and where it stops
 
@@ -323,6 +364,7 @@ and rebuild the page.
 | `collect.py` | takes a snapshot — run this daily |
 | `build_page.py` | rebuilds `docs/index.html` from every snapshot |
 | `reprocess.py` | recomputes the tidy files from the raw archive |
+| `backfill_gcp.py` | pulls Google's own price history month by month |
 | `storage.py` | where files go, and the columns of a price row |
 | `providers/oracle.py` | the Oracle feed, its filters and its chip lookup |
 | `providers/azure.py` | the Azure feed, its filters and its GPU-count table |
@@ -388,7 +430,7 @@ marketing page and nothing is estimated.
 |---|---|---|
 | Oracle | [`apexapps.oracle.com/pls/apex/cetools/api/v1/products`](https://apexapps.oracle.com/pls/apex/cetools/api/v1/products/?currencyCode=USD&serviceCategory=Compute) | none |
 | Microsoft Azure | [`prices.azure.com/api/retail/prices`](https://prices.azure.com/api/retail/prices) — [API reference](https://learn.microsoft.com/en-us/rest/api/cost-management/retail-prices/azure-retail-prices) | none |
-| Google Cloud | [Cloud Billing Catalog API](https://cloud.google.com/billing/docs/reference/rest/v1/services.skus/list), service `6F81-5844-456A` | free API key |
+| Google Cloud | [Cloud Billing Catalog API](https://docs.cloud.google.com/billing/docs/reference/rest/v1/services.skus/list), service `6F81-5844-456A` — `startTime`/`endTime` give historical versions | free API key |
 
 ### GPU counts per machine
 

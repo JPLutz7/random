@@ -778,20 +778,28 @@ function render() {
     // A long flat line is the easiest thing on this page to misread, so the
     // limits of the reconstruction are stated next to it rather than buried
     // in a README.
-    const anyStated = series.some(s => s.points.some(p => p.stated));
-    document.getElementById("detail-caveat").innerHTML = !anyStated ? "" :
-      '<details class="note"><summary><b>What the flat stretches mean, and what they do '
-      + 'not.</b> The line before ' + DATA.observed_from + ' is reconstructed from Azure\'s '
-      + 'published price windows, and it is worth knowing exactly how far that goes.</summary>'
-      + "<ul>"
-      + "<li>Azure stamps every price with the date it took effect. A flat stretch is Azure "
-      + "saying <em>this price has been in force since then</em> — it is a claim about the "
-      + "past, not a series of measurements.</li>"
-      + "<li>Azure keeps only the <b>current</b> window and at most <b>one</b> superseded "
-      + "one. So a price change that happened two revisions ago is not published anywhere "
-      + "and cannot be recovered. Flat does not prove nothing ever happened; it means "
-      + "nothing has happened since that start date, and earlier prices are not published."
-      + "</li>"
+    const statedBy = [...new Set(series.filter(s => s.points.some(p => p.stated))
+                                       .map(s => s.provider))];
+    const names = statedBy.map(k => DATA.provider_labels[k] || k);
+    document.getElementById("detail-caveat").innerHTML = !statedBy.length ? "" :
+      '<details class="note"><summary><b>Where the line before ' + DATA.observed_from
+      + ' comes from.</b> It is reconstructed from ' + names.join(" and ")
+      + "'s own published price history, which is worth reading with its limits in "
+      + 'mind.</summary><ul>'
+      + "<li>Both providers stamp a price with the date it took effect, so a flat stretch "
+      + "is the provider saying <em>this price was in force throughout</em>. It is a claim "
+      + "about the past, not a series of measurements.</li>"
+      + (statedBy.includes("azure")
+          ? "<li><b>Azure</b> keeps only the current window and at most <b>one</b> "
+            + "superseded one, so a change from two revisions ago is not published anywhere "
+            + "and cannot be recovered. Its flat stretches mean <em>no change since that "
+            + "start date</em>, not <em>nothing ever happened</em>.</li>"
+          : "")
+      + (statedBy.includes("gcp")
+          ? "<li><b>Google</b> returns every pricing version in force during a given month, "
+            + "so its history is complete back to the earliest month collected — including "
+            + "changes several revisions old.</li>"
+          : "")
       + "<li>The line is the <b>cheapest</b> machine for this chip in this geography. If a "
       + "dearer machine was repriced and the cheapest was not, the line does not move. The "
       + "table below shows every machine and the date each of its prices took effect.</li>"
