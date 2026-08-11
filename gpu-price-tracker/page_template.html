@@ -85,16 +85,38 @@
   h2 { font-size: 17px; margin: 40px 0 12px; }
   .sub { color: var(--text-secondary); margin: 0 0 20px; font-size: 14px; }
 
+  /* One card per hyperscaler, each carrying its provider colour. */
   .stamps {
-    display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 24px;
-    list-style: none; padding: 0;
+    display: grid; gap: 12px; margin: 0 0 28px; padding: 0; list-style: none;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
   }
   .stamps li {
     background: var(--surface-1); border: 1px solid var(--border);
-    border-radius: 8px; padding: 8px 12px; font-size: 13px;
+    border-left: 3px solid var(--accent);
+    border-radius: 8px; padding: 12px 14px; font-size: 13px;
   }
-  .stamps b { font-weight: 600; }
+  .stamps .name {
+    display: block; font-weight: 600; font-size: 15px; margin-bottom: 2px;
+    color: var(--text-primary); text-decoration: none;
+  }
+  .stamps .name:hover { text-decoration: underline; }
+  .stamps .big { font-variant-numeric: tabular-nums; color: var(--text-primary); }
   .stamps span { color: var(--text-muted); }
+
+  /* Per-provider section: heading, its own table, its own blanks. */
+  .section { margin: 0 0 28px; scroll-margin-top: 16px; }
+  .section > h2 {
+    display: flex; align-items: baseline; gap: 10px;
+    margin: 0 0 10px; font-size: 18px;
+  }
+  .section > h2::before {
+    content: ""; width: 10px; height: 10px; border-radius: 3px;
+    background: var(--accent); flex: none; align-self: center;
+  }
+  .section > h2 .meta {
+    font-size: 13px; font-weight: 400; color: var(--text-muted);
+  }
+  .section.empty { display: none; }
 
   .filters {
     display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end;
@@ -109,8 +131,12 @@
   }
   .count { margin-left: auto; font-size: 13px; color: var(--text-muted); }
 
+  /* Each provider's table scrolls inside its own box. Azure alone runs to
+     several hundred rows, and without this the two smaller hyperscalers sit
+     far below the fold -- which defeats the point of grouping by provider. */
   .tablewrap {
-    overflow-x: auto; background: var(--surface-1);
+    overflow: auto; max-height: 460px;
+    background: var(--surface-1);
     border: 1px solid var(--border); border-radius: 10px;
   }
   table { border-collapse: collapse; width: 100%; font-size: 14px; }
@@ -146,6 +172,9 @@
     color: var(--text-secondary); margin: 12px 0;
   }
   .note ul { margin: 8px 0 0; padding-left: 20px; }
+  details.note > summary { cursor: pointer; }
+  details.note > summary::marker { color: var(--text-muted); }
+  details.note > summary b { color: var(--text-primary); }
 
   .charts { display: grid; gap: 16px; grid-template-columns: repeat(auto-fill, minmax(330px, 1fr)); }
   .chart {
@@ -199,16 +228,9 @@
     <div class="count" id="count"></div>
   </div>
 
-  <div class="tablewrap">
-    <table>
-      <thead><tr id="head"></tr></thead>
-      <tbody id="body"></tbody>
-    </table>
-  </div>
+  <div id="sections"></div>
 
-  <div id="unpriced"></div>
-
-  <h2>Price over time</h2>
+  <h2>Price over time — across providers</h2>
   <div class="filters">
     <div class="field">
       <label for="f-charttype">Price type shown in charts</label>
@@ -227,6 +249,7 @@ const DATA = /*__DATA__*/null;
 
 const fmtPrice = v => v === null || v === undefined ? null : "$" + v.toFixed(v < 1 ? 4 : 2);
 const shortDate = ts => (ts || "").slice(0, 10);
+const plural = (n, word) => n + " " + word + (n === 1 ? "" : "s");
 
 /* ---------- header ---------- */
 document.getElementById("sub").textContent =
@@ -236,18 +259,25 @@ document.getElementById("sub").textContent =
       ? " · change shown against " + shortDate(DATA.previous)
       : " · first snapshot, no history to compare against yet");
 
-// Each provider carries two dates: when we pulled it, and the freshness stamp
-// the provider vouches for itself. They are not the same thing.
-const stamps = document.getElementById("stamps");
-stamps.innerHTML = Object.keys(DATA.provider_latest).sort().map(p => {
-  const pulled = DATA.provider_latest[p].slice(0, 19).replace("T", " ");
-  const said = DATA.provider_last_updated[p];
-  return '<li><b>' + (DATA.provider_labels[p] || p) + '</b><br>'
-       + '<span>pulled ' + pulled + ' UTC</span><br>'
-       + '<span>provider states ' + (said
-            ? said.slice(0, 19).replace("T", " ") + " UTC"
-            : "no stamp published") + '</span></li>';
-}).join("");
+/* ---------- provider identity ---------- */
+// Colour follows the entity, never its rank: each hyperscaler owns a fixed
+// slot for the life of the page, so the same colour marks that provider in its
+// header card, its section heading and its chart line.
+const PROVIDER_SLOT = { oracle: 1, azure: 2, gcp: 3 };
+const colorOf = provider => "var(--series-" + (PROVIDER_SLOT[provider] || 8) + ")";
+
+// Each provider carries two dates: when this tracker pulled it, and the
+// freshness stamp the provider vouches for itself. They are not the same thing.
+document.getElementById("stamps").innerHTML = DATA.providers.map(p =>
+  '<li style="--accent:' + colorOf(p.key) + '">'
+  + '<a class="name" href="#sec-' + p.key + '">' + p.label + '</a>'
+  + '<div class="big">' + p.priced_count + " of " + p.row_count
+  + " prices normalized · " + p.chips.length + " chips</div>"
+  + '<span>pulled ' + p.pulled.slice(0, 19).replace("T", " ") + ' UTC</span><br>'
+  + '<span>provider states ' + (p.stated
+       ? p.stated.slice(0, 19).replace("T", " ") + " UTC"
+       : "no stamp published") + '</span>'
+  + '</li>').join("");
 
 /* ---------- filters ---------- */
 const uniq = (key) => [...new Set(DATA.rows.map(r => r[key]).filter(Boolean))].sort();
@@ -264,10 +294,10 @@ fill("f-type", DATA.price_types, v => DATA.price_type_labels[v] || v);
 fill("f-provider", uniq("provider"), v => DATA.provider_labels[v] || v);
 fill("f-region", uniq("region"));
 
-/* ---------- table ---------- */
+/* ---------- one table per hyperscaler ---------- */
+// No Provider column: the section heading already says whose prices these are.
 const COLUMNS = [
   { key: "chip",             label: "Chip" },
-  { key: "provider_label",   label: "Provider" },
   { key: "price_type_label", label: "Price type" },
   { key: "usd_per_gpu_hour", label: "$ / GPU-hour", num: true },
   { key: "basis",            label: "Covers" },
@@ -281,18 +311,32 @@ const COLUMNS = [
 // Default view: most expensive first, so the headline chips lead.
 let sortKey = "usd_per_gpu_hour", sortDir = -1;
 
-const head = document.getElementById("head");
-COLUMNS.forEach(col => {
-  const th = document.createElement("th");
-  th.dataset.key = col.key;
-  if (col.num) th.className = "num";
-  th.innerHTML = col.label + ' <span class="arrow"></span>';
-  th.addEventListener("click", () => {
-    if (sortKey === col.key) sortDir = -sortDir;
-    else { sortKey = col.key; sortDir = col.num ? -1 : 1; }
-    render();
+// One section per hyperscaler, in a stable order. Sorting is deliberately
+// shared across the sections: clicking "$ / GPU-hour" sorts all three the same
+// way, so the columns stay readable straight down the page.
+document.getElementById("sections").innerHTML = DATA.providers.map(p =>
+  '<section class="section" id="sec-' + p.key + '" style="--accent:' + colorOf(p.key) + '">'
+  + '<h2>' + p.label + ' <span class="meta" id="meta-' + p.key + '"></span></h2>'
+  + '<div class="tablewrap"><table>'
+  + '<thead><tr id="head-' + p.key + '"></tr></thead>'
+  + '<tbody id="body-' + p.key + '"></tbody></table></div>'
+  + '<div id="blanks-' + p.key + '"></div>'
+  + '</section>').join("");
+
+DATA.providers.forEach(p => {
+  const head = document.getElementById("head-" + p.key);
+  COLUMNS.forEach(col => {
+    const th = document.createElement("th");
+    th.dataset.key = col.key;
+    if (col.num) th.className = "num";
+    th.innerHTML = col.label + ' <span class="arrow"></span>';
+    th.addEventListener("click", () => {
+      if (sortKey === col.key) sortDir = -sortDir;
+      else { sortKey = col.key; sortDir = col.num ? -1 : 1; }
+      render();
+    });
+    head.appendChild(th);
   });
-  head.appendChild(th);
 });
 
 function currentRows() {
@@ -343,63 +387,83 @@ function changeCell(r) {
        + " (" + sign + Math.abs(r.change_pct).toFixed(1) + "%)</td>";
 }
 
-function render() {
-  const rows = currentRows().sort(compare);
-  document.getElementById("count").textContent =
-    rows.length + " of " + DATA.rows.length + " rows";
-
-  head.querySelectorAll("th").forEach(th => {
-    th.querySelector(".arrow").textContent =
-      th.dataset.key === sortKey ? (sortDir === 1 ? "▲" : "▼") : "";
-  });
-
-  document.getElementById("body").innerHTML = rows.map(r => {
-    const per = fmtPrice(r.usd_per_gpu_hour);
-    // Only a genuinely extrapolated figure gets the loud label. Other notes --
-    // such as Google's "accelerator + vCPU + RAM" breakdown -- are useful
-    // detail, not a warning, so they hide behind a quiet marker instead.
-    const flag = !(r.notes && per) ? ""
-      : /extrapolat/i.test(r.notes)
-        ? ' <abbr class="flag" title="' + r.notes + '">extrapolated</abbr>'
-        : ' <abbr class="flag info" title="' + r.notes + '">how</abbr>';
-    return "<tr>"
-      + "<td>" + (r.chip || '<span class="blank">not identified</span>') + "</td>"
-      + "<td>" + r.provider_label + "</td>"
-      + "<td>" + r.price_type_label + "</td>"
-      + '<td class="num price">' + (per || '<span class="blank">—</span>') + flag + "</td>"
-      + "<td>" + basisCell(r) + "</td>"
-      + changeCell(r)
-      + '<td class="num">' + (r.list_price === null ? "—" : "$" + r.list_price) + "</td>"
-      + '<td class="num muted">' + (r.gpu_count || '<span class="blank">?</span>') + "</td>"
-      + '<td class="muted">' + r.region + "</td>"
-      + '<td class="sku">' + r.sku_name + ' <span class="muted">' + r.sku_id + "</span></td>"
-      + "</tr>";
-  }).join("");
+function rowHtml(r) {
+  const per = fmtPrice(r.usd_per_gpu_hour);
+  // Only a genuinely extrapolated figure gets the loud label. Other notes --
+  // such as Google's "accelerator + vCPU + RAM" breakdown -- are useful
+  // detail, not a warning, so they hide behind a quiet marker instead.
+  const flag = !(r.notes && per) ? ""
+    : /extrapolat/i.test(r.notes)
+      ? ' <abbr class="flag" title="' + r.notes + '">extrapolated</abbr>'
+      : ' <abbr class="flag info" title="' + r.notes + '">how</abbr>';
+  return "<tr>"
+    + "<td>" + (r.chip || '<span class="blank">not identified</span>') + "</td>"
+    + "<td>" + r.price_type_label + "</td>"
+    + '<td class="num price">' + (per || '<span class="blank">—</span>') + flag + "</td>"
+    + "<td>" + basisCell(r) + "</td>"
+    + changeCell(r)
+    + '<td class="num">' + (r.list_price === null ? "—" : "$" + r.list_price) + "</td>"
+    + '<td class="num muted">' + (r.gpu_count || '<span class="blank">?</span>') + "</td>"
+    + '<td class="muted">' + r.region + "</td>"
+    + '<td class="sku">' + r.sku_name + ' <span class="muted">' + r.sku_id + "</span></td>"
+    + "</tr>";
 }
 
-["f-chip", "f-type", "f-provider", "f-search"].forEach(id =>
+// The blanks belong under the provider that produced them. In one flat list,
+// 64 unrecognized SKUs read as a single failure; split by provider they read
+// as what they are -- five old Oracle names, a pile of Azure non-GPU parts,
+// and three Google oddities. Derived from the filtered rows so it tracks the
+// filters instead of going stale.
+function blanksHtml(rows, provider) {
+  const seen = new Map();
+  rows.forEach(r => {
+    if (r.usd_per_gpu_hour === null && !seen.has(r.sku_id)) seen.set(r.sku_id, r);
+  });
+  if (!seen.size) return "";
+  // Collapsed by default and sorted. Azure alone contributes 51 of these, and
+  // an open list of them buries the next hyperscaler's section.
+  const items = [...seen.values()].sort((a, b) => a.sku_id.localeCompare(b.sku_id));
+  return '<details class="note"><summary><b>' + plural(seen.size, "machine")
+    + " with no per-GPU-hour figure.</b> The list price is recorded and archived, but the "
+    + "chip or the number of chips could not be established from " + provider.label
+    + "'s own data, so the figure is left blank rather than guessed.</summary>"
+    + "<ul>" + items.map(r =>
+        "<li><b>" + r.sku_id + "</b> — $" + r.list_price + " per "
+        + r.list_price_unit.toLowerCase()
+        + (r.notes ? " <span class='muted'>(" + r.notes + ")</span>" : "")
+        + "</li>").join("")
+    + "</ul></details>";
+}
+
+function render() {
+  const all = currentRows();
+  document.getElementById("count").textContent =
+    all.length + " of " + DATA.rows.length + " rows";
+
+  DATA.providers.forEach(p => {
+    const rows = all.filter(r => r.provider === p.key).sort(compare);
+    // A provider filtered down to nothing is hidden rather than shown empty.
+    document.getElementById("sec-" + p.key).classList.toggle("empty", rows.length === 0);
+
+    const chips = new Set(rows.filter(r => r.usd_per_gpu_hour !== null && r.chip)
+                              .map(r => r.chip));
+    document.getElementById("meta-" + p.key).textContent =
+      plural(rows.length, "price") + " · " + plural(chips.size, "chip")
+      + " · " + p.regions.join(", ");
+
+    document.getElementById("head-" + p.key).querySelectorAll("th").forEach(th => {
+      th.querySelector(".arrow").textContent =
+        th.dataset.key === sortKey ? (sortDir === 1 ? "▲" : "▼") : "";
+    });
+
+    document.getElementById("body-" + p.key).innerHTML = rows.map(rowHtml).join("");
+    document.getElementById("blanks-" + p.key).innerHTML = blanksHtml(rows, p);
+  });
+}
+
+["f-chip", "f-type", "f-provider", "f-region", "f-search"].forEach(id =>
   document.getElementById(id).addEventListener("input", render));
 render();
-
-/* ---------- SKUs we deliberately left blank ---------- */
-if (DATA.unpriced.length) {
-  document.getElementById("unpriced").innerHTML =
-    '<div class="note"><b>' + DATA.unpriced.length + " machine(s) with no per-GPU-hour figure.</b> "
-    + "Their list price is recorded and archived, but the chip or the number of chips could not "
-    + "be established from the provider's own data, so the normalized figure is left blank "
-    + "rather than guessed. A wrong number that looks plausible is worse than a blank."
-    + "<ul>" + DATA.unpriced.map(r =>
-        "<li><b>" + r.sku_id + "</b> <span class='muted'>" + r.provider_label + "</span> — $"
-        + r.list_price + " per " + r.list_price_unit.toLowerCase() + "</li>").join("")
-    + "</ul></div>";
-}
-
-/* ---------- charts ---------- */
-// Color follows the entity, never its rank: each provider owns a fixed slot
-// for the life of the page, so changing the price type or dropping a provider
-// never repaints the survivors.
-const PROVIDER_SLOT = { oracle: 1, azure: 2, gcp: 3 };
-const colorOf = provider => "var(--series-" + (PROVIDER_SLOT[provider] || 8) + ")";
 
 const tip = document.getElementById("tip");
 function showTip(html, evt) {

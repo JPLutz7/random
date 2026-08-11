@@ -122,6 +122,7 @@ def build():
             # One entry per SKU, not per price type -- Azure produces up to
             # seven rows for the same unrecognized machine.
             unpriced.setdefault((row["provider"], row["sku_id"]), {
+                "provider": row["provider"],
                 "provider_label": record["provider_label"],
                 "sku_id": row["sku_id"],
                 "sku_name": row["sku_name"],
@@ -173,6 +174,30 @@ def build():
     price_types_present += sorted({r["price_type"] for r in latest_rows}
                                   - set(price_types_present))
 
+    # The page is organised by provider, so each one carries its own header
+    # facts: when it was pulled, the freshness date it vouches for itself, how
+    # much of it landed, and which of its SKUs were left blank. Attributing the
+    # blanks to the provider they came from is the point -- in one flat list,
+    # 64 unrecognized SKUs read as one big failure rather than three separate
+    # and quite different ones.
+    provider_blocks = []
+    for key in sorted(provider_latest, key=lambda p: PROVIDER_LABELS.get(p, p)):
+        own = [r for r in latest_rows if r["provider"] == key]
+        priced_rows = [r for r in own if r["usd_per_gpu_hour"] is not None]
+        provider_blocks.append({
+            "key": key,
+            "label": PROVIDER_LABELS.get(key, key),
+            "pulled": provider_latest[key],
+            "stated": provider_last_updated.get(key, ""),
+            "row_count": len(own),
+            "priced_count": len(priced_rows),
+            "chips": sorted({r["chip"] for r in priced_rows if r["chip"]}),
+            "regions": sorted({r["region"] for r in own}),
+            "price_types": [t for t in price_types_present
+                            if any(r["price_type"] == t for r in own)],
+            "unpriced": [u for u in unpriced.values() if u["provider"] == key],
+        })
+
     payload = {
         "generated_at": storage.utc_now().isoformat(),
         "snapshots": snapshots,
@@ -181,6 +206,7 @@ def build():
         "provider_last_updated": provider_last_updated,
         "provider_latest": provider_latest,
         "provider_labels": PROVIDER_LABELS,
+        "providers": provider_blocks,
         "price_type_labels": PRICE_TYPE_LABELS,
         "price_types": price_types_present,
         "rows": latest_rows,

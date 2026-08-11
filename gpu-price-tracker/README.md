@@ -193,6 +193,32 @@ and rebuild the page.
 | `providers/gcp.py` | the Google feed, its filters, chip lookup and machine shapes |
 | `page_template.html` | the page's markup, styling and behaviour |
 
+## How the page is laid out
+
+The page is organised by hyperscaler:
+
+1. **A card per provider** — how many of its prices were normalized, how many
+   chips that covers, when this tracker pulled it, and the freshness date the
+   provider states for itself. Click a card to jump to that provider.
+2. **A section per provider** — its own sortable table, its own region, and its
+   own list of SKUs left blank, collapsed by default. Attributing the blanks to
+   the provider that produced them matters: in one flat list, 64 unrecognized
+   SKUs read as a single failure rather than three separate and quite different
+   ones. Each table scrolls inside its own box, so a provider with hundreds of
+   rows does not push the others off the screen.
+3. **Charts, across providers** — this is the one place the providers are
+   deliberately mixed, because comparing them over time is the point. One line
+   per provider per chip, showing the cheapest per-GPU-hour it lists, with its
+   own price-type selector.
+
+The filters at the top apply to every section at once, and a provider filtered
+down to nothing is hidden rather than shown empty. Sorting is shared across the
+sections, so clicking a column heading sorts all three the same way and the
+numbers stay readable straight down the page.
+
+Each provider keeps a fixed colour — in its card, its section heading, and its
+chart line — so the same hyperscaler is recognisable wherever it appears.
+
 The page's data is embedded directly inside `docs/index.html` rather than
 loaded from a separate file, because browsers block a local page from reading
 another local file. Embedding is what lets it work by double-clicking, with no
