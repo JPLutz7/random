@@ -84,10 +84,11 @@
   h1 { font-size: 24px; margin: 0 0 4px; letter-spacing: -0.01em; }
   h2 { font-size: 17px; margin: 40px 0 12px; }
   .sub { color: var(--text-secondary); margin: 0 0 20px; font-size: 14px; }
+  a { color: inherit; }
 
   /* One card per hyperscaler, each carrying its provider colour. */
   .stamps {
-    display: grid; gap: 12px; margin: 0 0 28px; padding: 0; list-style: none;
+    display: grid; gap: 12px; margin: 0 0 24px; padding: 0; list-style: none;
     grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
   }
   .stamps li {
@@ -103,8 +104,24 @@
   .stamps .big { font-variant-numeric: tabular-nums; color: var(--text-primary); }
   .stamps span { color: var(--text-muted); }
 
-  /* Per-provider section: heading, its own table, its own blanks. */
-  .section { margin: 0 0 28px; scroll-margin-top: 16px; }
+  /* The three toggles. Sticky so they stay reachable down a long page. */
+  .filters {
+    display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end;
+    margin-bottom: 20px; padding: 12px 14px;
+    background: var(--surface-1); border: 1px solid var(--border);
+    border-radius: 10px;
+    position: sticky; top: 0; z-index: 5;
+  }
+  .field { display: flex; flex-direction: column; gap: 4px; }
+  .field label { font-size: 12px; color: var(--text-secondary); }
+  select, input[type=search] {
+    font: inherit; font-size: 14px; padding: 6px 10px;
+    background: var(--page); color: var(--text-primary);
+    border: 1px solid var(--border); border-radius: 8px; min-width: 160px;
+  }
+  .count { margin-left: auto; font-size: 13px; color: var(--text-muted); }
+
+  .section { margin: 0 0 28px; scroll-margin-top: 90px; }
   .section > h2 {
     display: flex; align-items: baseline; gap: 10px;
     margin: 0 0 10px; font-size: 18px;
@@ -113,29 +130,11 @@
     content: ""; width: 10px; height: 10px; border-radius: 3px;
     background: var(--accent); flex: none; align-self: center;
   }
-  .section > h2 .meta {
-    font-size: 13px; font-weight: 400; color: var(--text-muted);
-  }
+  .section > h2 .meta { font-size: 13px; font-weight: 400; color: var(--text-muted); }
   .section.empty { display: none; }
-  .regionpick { font-size: 12px; font-weight: 400; color: var(--text-muted); }
-  .regionpick select { min-width: 0; padding: 3px 6px; font-size: 12px; margin-left: 4px; }
 
-  .filters {
-    display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end;
-    margin-bottom: 16px;
-  }
-  .field { display: flex; flex-direction: column; gap: 4px; }
-  .field label { font-size: 12px; color: var(--text-secondary); }
-  select, input[type=search] {
-    font: inherit; font-size: 14px; padding: 6px 10px;
-    background: var(--surface-1); color: var(--text-primary);
-    border: 1px solid var(--border); border-radius: 8px; min-width: 150px;
-  }
-  .count { margin-left: auto; font-size: 13px; color: var(--text-muted); }
-
-  /* Each provider's table scrolls inside its own box. Azure alone runs to
-     several hundred rows, and without this the two smaller hyperscalers sit
-     far below the fold -- which defeats the point of grouping by provider. */
+  /* Each provider's table scrolls inside its own box, so a provider with
+     hundreds of rows does not push the others off the screen. */
   .tablewrap {
     overflow: auto; max-height: 460px;
     background: var(--surface-1);
@@ -159,7 +158,7 @@
   .up { color: var(--up); }
   .down { color: var(--down); }
   .muted { color: var(--text-muted); }
-  .sku { color: var(--text-secondary); font-size: 13px; white-space: normal; min-width: 260px; }
+  .sku { color: var(--text-secondary); font-size: 13px; white-space: normal; min-width: 240px; }
   .flag {
     font-size: 10px; font-weight: 600; text-transform: uppercase;
     letter-spacing: .03em; color: var(--text-muted);
@@ -183,21 +182,51 @@
     background: var(--surface-1); border: 1px solid var(--border);
     border-radius: 10px; padding: 14px 14px 8px;
   }
+  /* Overview charts are buttons: clicking one opens its detail view. */
+  a.chart { display: block; text-decoration: none; color: inherit; transition: border-color .12s; }
+  a.chart:hover { border-color: var(--baseline); }
+  a.chart:hover h3 { text-decoration: underline; }
   .chart h3 { margin: 0 0 2px; font-size: 15px; }
-  .chart .legend { display: flex; flex-wrap: wrap; gap: 10px; margin: 6px 0 4px; font-size: 12px; color: var(--text-secondary); }
-  .chart .legend i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 5px; vertical-align: -1px; }
+  .chart .legend {
+    display: flex; flex-wrap: wrap; gap: 10px; margin: 6px 0 4px;
+    font-size: 12px; color: var(--text-secondary);
+  }
+  .chart .legend i {
+    display: inline-block; width: 10px; height: 10px; border-radius: 3px;
+    margin-right: 5px; vertical-align: -1px;
+  }
+  .chart .legend .dash {
+    width: 14px; height: 0; border-radius: 0;
+    border-top: 2px dashed var(--accent2); vertical-align: 3px;
+  }
   .chart svg { width: 100%; height: auto; display: block; }
   .chart .axis { fill: var(--text-muted); font-size: 10px; }
   .chart .grid { stroke: var(--gridline); stroke-width: 1; }
   .chart .base { stroke: var(--baseline); stroke-width: 1; }
+  .chart .hair { stroke: var(--baseline); stroke-width: 1; stroke-dasharray: 3 3; }
+
+  /* Detail view */
+  .detail { background: var(--surface-1); border: 1px solid var(--border);
+            border-radius: 10px; padding: 18px 18px 10px; margin-bottom: 8px; }
+  .detail h2 { margin: 0 0 2px; font-size: 22px; }
+  .detail .axis { font-size: 11px; }
+  .back {
+    display: inline-block; margin-bottom: 14px; font-size: 14px;
+    color: var(--text-secondary); text-decoration: none;
+  }
+  .back:hover { color: var(--text-primary); text-decoration: underline; }
+  .hidden { display: none !important; }
+
   .tip {
     position: fixed; pointer-events: none; z-index: 10; opacity: 0;
     transition: opacity .1s; background: var(--surface-1);
     border: 1px solid var(--border); border-radius: 8px;
-    padding: 8px 10px; font-size: 12.5px; line-height: 1.45;
-    box-shadow: 0 4px 16px rgba(0,0,0,.18); max-width: 260px;
+    padding: 8px 10px; font-size: 12.5px; line-height: 1.5;
+    box-shadow: 0 4px 16px rgba(0,0,0,.18); max-width: 300px;
   }
   .tip b { font-variant-numeric: tabular-nums; }
+  .tip i { display: inline-block; width: 9px; height: 9px; border-radius: 2px;
+           margin-right: 6px; vertical-align: -1px; }
 </style>
 </head>
 <body>
@@ -209,35 +238,42 @@
   <div class="filters">
     <div class="field">
       <label for="f-chip">Chip</label>
-      <select id="f-chip"><option value="">All chips</option></select>
+      <select id="f-chip"></select>
     </div>
     <div class="field">
       <label for="f-type">Price type</label>
-      <select id="f-type"><option value="">All price types</option></select>
+      <select id="f-type"></select>
     </div>
     <div class="field">
-      <label for="f-provider">Provider</label>
-      <select id="f-provider"><option value="">All providers</option></select>
+      <label for="f-region">Region</label>
+      <select id="f-region"></select>
     </div>
     <div class="field">
       <label for="f-search">Search SKU</label>
-      <input type="search" id="f-search" placeholder="e.g. H100">
+      <input type="search" id="f-search" placeholder="e.g. ND96isr">
     </div>
     <div class="count" id="count"></div>
   </div>
 
-  <div id="sections"></div>
-
-  <h2>Price over time — across providers</h2>
-  <div class="filters">
-    <div class="field">
-      <label for="f-charttype">Price type shown in charts</label>
-      <select id="f-charttype"></select>
+  <!-- Detail view: one chip, one big interactive chart. -->
+  <div id="detail" class="hidden">
+    <a class="back" href="#">← all chips</a>
+    <div class="detail">
+      <h2 id="detail-title"></h2>
+      <p class="sub" id="detail-sub"></p>
+      <div class="chart" id="detail-chart"></div>
     </div>
   </div>
-  <p class="sub" id="chartcaption"></p>
-  <div id="chartnote"></div>
-  <div class="charts" id="charts"></div>
+
+  <div id="sections"></div>
+
+  <!-- Overview only: the grid of per-chip charts. -->
+  <div id="overview-charts">
+    <h2>Price over time — across providers</h2>
+    <p class="sub" id="chartcaption"></p>
+    <div id="chartnote"></div>
+    <div class="charts" id="charts"></div>
+  </div>
 </div>
 
 <div class="tip" id="tip"></div>
@@ -247,52 +283,93 @@ const DATA = /*__DATA__*/null;
 
 const fmtPrice = v => v === null || v === undefined ? null : "$" + v.toFixed(v < 1 ? 4 : 2);
 const shortDate = ts => (ts || "").slice(0, 10);
-const plural = (n, word) => n + " " + word + (n === 1 ? "" : "s");
-
-/* ---------- header ---------- */
-document.getElementById("sub").textContent =
-  "Snapshot of " + shortDate(DATA.latest) + " · US dollars per GPU per hour · "
-  + DATA.rows.length + " prices"
-  + (DATA.previous
-      ? " · change shown against " + shortDate(DATA.previous)
-      : " · first snapshot, no history to compare against yet");
+const plural = (n, w) => n + " " + w + (n === 1 ? "" : "s");
+const typeLabel = t => t === "" ? "All price types" : (DATA.price_type_labels[t] || t);
 
 /* ---------- provider identity ---------- */
 // Colour follows the entity, never its rank: each hyperscaler owns a fixed
 // slot for the life of the page, so the same colour marks that provider in its
-// header card, its section heading and its chart line.
+// card, its section heading and its chart line, whatever the filters do.
 const PROVIDER_SLOT = { oracle: 1, azure: 2, gcp: 3 };
 const colorOf = provider => "var(--series-" + (PROVIDER_SLOT[provider] || 8) + ")";
 
-// Each provider carries two dates: when this tracker pulled it, and the
-// freshness stamp the provider vouches for itself. They are not the same thing.
+/* ---------- state, mirrored in the URL ---------- */
+// The three toggles are the whole state. Keeping them in the hash means the
+// back button works, a view can be bookmarked, and clicking a chart is just
+// "set chip", which is what turns the overview into the detail view.
+const state = { chip: "", type: "on_demand", group: DATA.default_group, q: "" };
+
+function readHash() {
+  const h = new URLSearchParams(location.hash.replace(/^#/, ""));
+  if (h.has("chip")) state.chip = h.get("chip");
+  else state.chip = "";
+  if (h.has("type")) state.type = h.get("type");
+  if (h.has("region")) state.group = h.get("region");
+  if (h.has("q")) state.q = h.get("q");
+}
+function writeHash(push) {
+  const h = new URLSearchParams();
+  if (state.chip) h.set("chip", state.chip);
+  h.set("type", state.type);
+  h.set("region", state.group);
+  if (state.q) h.set("q", state.q);
+  const url = "#" + h.toString();
+  if (push) location.hash = url;
+  else history.replaceState(null, "", url);
+}
+
+/* ---------- header ---------- */
+document.getElementById("sub").textContent =
+  "Snapshot of " + shortDate(DATA.latest) + " · US dollars per GPU per hour · "
+  + DATA.rows.length.toLocaleString() + " prices collected"
+  + (DATA.previous
+      ? " · change shown against " + shortDate(DATA.previous)
+      : " · first snapshot, no history to compare against yet");
+
 document.getElementById("stamps").innerHTML = DATA.providers.map(p =>
   '<li style="--accent:' + colorOf(p.key) + '">'
   + '<a class="name" href="#sec-' + p.key + '">' + p.label + '</a>'
-  + '<div class="big">' + p.priced_count + " of " + p.row_count
-  + " prices normalized · " + p.chips.length + " chips</div>"
+  + '<div class="big">' + p.priced_count.toLocaleString() + " of "
+  + p.row_count.toLocaleString() + " prices normalized · "
+  + plural(p.regions.length, "region") + "</div>"
   + '<span>pulled ' + p.pulled.slice(0, 19).replace("T", " ") + ' UTC</span><br>'
   + '<span>provider states ' + (p.stated
        ? p.stated.slice(0, 19).replace("T", " ") + " UTC"
        : "no stamp published") + '</span>'
   + '</li>').join("");
 
-/* ---------- filters ---------- */
-const uniq = (key) => [...new Set(DATA.rows.map(r => r[key]).filter(Boolean))].sort();
-function fill(id, values, labelOf) {
+/* ---------- the three toggles ---------- */
+function fillSelect(id, options) {
   const sel = document.getElementById(id);
-  values.forEach(v => {
-    const o = document.createElement("option");
-    o.value = v; o.textContent = labelOf ? labelOf(v) : v;
-    sel.appendChild(o);
-  });
+  sel.innerHTML = options.map(([value, label]) =>
+    '<option value="' + value.replace(/"/g, "&quot;") + '">' + label + "</option>").join("");
 }
-fill("f-chip", uniq("chip"));
-fill("f-type", DATA.price_types, v => DATA.price_type_labels[v] || v);
-fill("f-provider", uniq("provider"), v => DATA.provider_labels[v] || v);
 
-/* ---------- one table per hyperscaler ---------- */
-// No Provider column: the section heading already says whose prices these are.
+const allChips = [...new Set(DATA.rows.map(r => r.chip).filter(Boolean))].sort();
+fillSelect("f-chip", [["", "All chips"]].concat(allChips.map(c => [c, c])));
+fillSelect("f-type", [["", "All price types"]]
+  .concat(DATA.price_types.map(t => [t, DATA.price_type_labels[t] || t])));
+fillSelect("f-region", DATA.group_order.map(g => [g, g]));
+
+/* ---------- filtering ---------- */
+// Oracle charges one price worldwide, so its rows belong to every geography
+// rather than to none -- otherwise picking a region would drop Oracle entirely.
+function inRegion(row) {
+  const g = DATA.group_by_region[row.region];
+  return g === DATA.worldwide || g === state.group;
+}
+
+function currentRows() {
+  const q = state.q.trim().toLowerCase();
+  return DATA.rows.filter(r =>
+    (!state.chip || r.chip === state.chip) &&
+    (!state.type || r.price_type === state.type) &&
+    inRegion(r) &&
+    (!q || (r.sku_name + " " + r.sku_id + " " + r.chip).toLowerCase().includes(q))
+  );
+}
+
+/* ---------- tables ---------- */
 const COLUMNS = [
   { key: "chip",             label: "Chip" },
   { key: "price_type",       label: "Price type" },
@@ -301,26 +378,15 @@ const COLUMNS = [
   { key: "change",           label: "Change", num: true },
   { key: "list_price",       label: "List price", num: true },
   { key: "gpu_count",        label: "GPUs", num: true },
+  { key: "region",           label: "Region" },
   { key: "sku_name",         label: "Provider SKU" },
 ];
 
-// Default view: most expensive first, so the headline chips lead.
 let sortKey = "usd_per_gpu_hour", sortDir = -1;
 
-// One section per hyperscaler, in a stable order. Sorting is deliberately
-// shared across the sections: clicking "$ / GPU-hour" sorts all three the same
-// way, so the columns stay readable straight down the page.
 document.getElementById("sections").innerHTML = DATA.providers.map(p =>
   '<section class="section" id="sec-' + p.key + '" style="--accent:' + colorOf(p.key) + '">'
-  + '<h2>' + p.label + ' <span class="meta" id="meta-' + p.key + '"></span>'
-  + (p.regions.length > 1
-      ? '<label class="regionpick">region '
-        + '<select id="region-' + p.key + '">'
-        + p.regions.map(r => '<option' + (r === p.default_region ? ' selected' : '')
-            + '>' + r + '</option>').join("")
-        + '</select></label>'
-      : "")
-  + '</h2>'
+  + '<h2>' + p.label + ' <span class="meta" id="meta-' + p.key + '"></span></h2>'
   + '<div class="tablewrap"><table>'
   + '<thead><tr id="head-' + p.key + '"></tr></thead>'
   + '<tbody id="body-' + p.key + '"></tbody></table></div>'
@@ -328,14 +394,14 @@ document.getElementById("sections").innerHTML = DATA.providers.map(p =>
   + '</section>').join("");
 
 DATA.providers.forEach(p => {
-  const pick = document.getElementById("region-" + p.key);
-  if (pick) pick.addEventListener("change", render);
   const head = document.getElementById("head-" + p.key);
   COLUMNS.forEach(col => {
     const th = document.createElement("th");
     th.dataset.key = col.key;
     if (col.num) th.className = "num";
     th.innerHTML = col.label + ' <span class="arrow"></span>';
+    // Sorting is shared across the sections so a column reads consistently
+    // straight down the page.
     th.addEventListener("click", () => {
       if (sortKey === col.key) sortDir = -sortDir;
       else { sortKey = col.key; sortDir = col.num ? -1 : 1; }
@@ -344,21 +410,6 @@ DATA.providers.forEach(p => {
     head.appendChild(th);
   });
 });
-
-function currentRows() {
-  const chip = document.getElementById("f-chip").value;
-  const type = document.getElementById("f-type").value;
-  const prov = document.getElementById("f-provider").value;
-  const q = document.getElementById("f-search").value.trim().toLowerCase();
-  // Region is deliberately NOT here: each provider names its regions
-  // differently, so the selector lives in the section header instead.
-  return DATA.rows.filter(r =>
-    (!chip || r.chip === chip) &&
-    (!type || r.price_type === type) &&
-    (!prov || r.provider === prov) &&
-    (!q || (r.sku_name + " " + r.sku_id + " " + r.chip).toLowerCase().includes(q))
-  );
-}
 
 function compare(a, b) {
   let x = a[sortKey], y = b[sortKey];
@@ -396,37 +447,35 @@ function changeCell(r) {
 function rowHtml(r) {
   const per = fmtPrice(r.usd_per_gpu_hour);
   // Only a genuinely extrapolated figure gets the loud label. Other notes --
-  // such as Google's "accelerator + vCPU + RAM" breakdown -- are useful
-  // detail, not a warning, so they hide behind a quiet marker instead.
+  // such as Google's "accelerator + vCPU + RAM" breakdown -- are useful detail,
+  // not a warning, so they hide behind a quiet marker instead.
   const flag = !(r.notes && per) ? ""
     : /extrapolat/i.test(r.notes)
       ? ' <abbr class="flag" title="' + r.notes + '">extrapolated</abbr>'
       : ' <abbr class="flag info" title="' + r.notes + '">how</abbr>';
   return "<tr>"
     + "<td>" + (r.chip || '<span class="blank">not identified</span>') + "</td>"
-    + "<td>" + (DATA.price_type_labels[r.price_type] || r.price_type) + "</td>"
+    + "<td>" + typeLabel(r.price_type) + "</td>"
     + '<td class="num price">' + (per || '<span class="blank">—</span>') + flag + "</td>"
     + "<td>" + basisCell(r) + "</td>"
     + changeCell(r)
     + '<td class="num">' + (r.list_price === null ? "—" : "$" + r.list_price) + "</td>"
     + '<td class="num muted">' + (r.gpu_count || '<span class="blank">?</span>') + "</td>"
+    + '<td class="muted">' + r.region + "</td>"
     + '<td class="sku">' + r.sku_name + ' <span class="muted">' + r.sku_id + "</span></td>"
     + "</tr>";
 }
 
-// The blanks belong under the provider that produced them. In one flat list,
-// 64 unrecognized SKUs read as a single failure; split by provider they read
-// as what they are -- five old Oracle names, a pile of Azure non-GPU parts,
-// and three Google oddities. Derived from the filtered rows so it tracks the
-// filters instead of going stale.
+// The blanks belong under the provider that produced them. In one flat list
+// they read as a single failure; split by provider they read as what they are.
+// Derived from the filtered rows so they track the toggles, collapsed and
+// sorted so a long list does not bury the next section.
 function blanksHtml(rows, provider) {
   const seen = new Map();
   rows.forEach(r => {
     if (r.usd_per_gpu_hour === null && !seen.has(r.sku_id)) seen.set(r.sku_id, r);
   });
   if (!seen.size) return "";
-  // Collapsed by default and sorted. Azure alone contributes 51 of these, and
-  // an open list of them buries the next hyperscaler's section.
   const items = [...seen.values()].sort((a, b) => a.sku_id.localeCompare(b.sku_id));
   return '<details class="note"><summary><b>' + plural(seen.size, "machine")
     + " with no per-GPU-hour figure.</b> The list price is recorded and archived, but the "
@@ -440,39 +489,7 @@ function blanksHtml(rows, provider) {
     + "</ul></details>";
 }
 
-function render() {
-  const all = currentRows();
-  document.getElementById("count").textContent =
-    all.length + " of " + DATA.rows.length + " rows";
-
-  DATA.providers.forEach(p => {
-    const pick = document.getElementById("region-" + p.key);
-    const region = pick ? pick.value : p.default_region;
-    const rows = all.filter(r => r.provider === p.key && r.region === region)
-                    .sort(compare);
-    // A provider filtered down to nothing is hidden rather than shown empty.
-    document.getElementById("sec-" + p.key).classList.toggle("empty", rows.length === 0);
-
-    const chips = new Set(rows.filter(r => r.usd_per_gpu_hour !== null && r.chip)
-                              .map(r => r.chip));
-    document.getElementById("meta-" + p.key).textContent =
-      plural(rows.length, "price") + " · " + plural(chips.size, "chip")
-      + " · " + plural(p.regions.length, "region") + " collected";
-
-    document.getElementById("head-" + p.key).querySelectorAll("th").forEach(th => {
-      th.querySelector(".arrow").textContent =
-        th.dataset.key === sortKey ? (sortDir === 1 ? "▲" : "▼") : "";
-    });
-
-    document.getElementById("body-" + p.key).innerHTML = rows.map(rowHtml).join("");
-    document.getElementById("blanks-" + p.key).innerHTML = blanksHtml(rows, p);
-  });
-}
-
-["f-chip", "f-type", "f-provider", "f-search"].forEach(id =>
-  document.getElementById(id).addEventListener("input", render));
-render();
-
+/* ---------- charts ---------- */
 const tip = document.getElementById("tip");
 function showTip(html, evt) {
   tip.innerHTML = html;
@@ -486,12 +503,34 @@ function showTip(html, evt) {
 }
 const hideTip = () => { tip.style.opacity = 0; };
 
-function drawChart(chip, series) {
-  const W = 340, H = 190, L = 48, R = 12, T = 12, B = 26;
+function seriesFor(chip) {
+  const byType = DATA.charts[chip];
+  if (!byType) return [];
+  const byGroup = byType[state.type];
+  if (!byGroup) return [];
+  // Oracle's series is filed under the worldwide key rather than a geography,
+  // because it charges one price everywhere. It has to be merged into whatever
+  // geography is selected or Oracle silently vanishes from every chart.
+  const here = byGroup[state.group] || [];
+  const everywhere = byGroup[DATA.worldwide] || [];
+  return here.concat(everywhere);
+}
+
+/**
+ * Draw one chip's price history.
+ *
+ * `big` switches between the overview thumbnail and the detail view, which
+ * adds a crosshair that reads every series at once instead of needing each
+ * point hovered individually.
+ */
+function drawChart(chip, series, big) {
+  const W = big ? 900 : 340, H = big ? 380 : 190;
+  const L = big ? 64 : 48, R = big ? 20 : 12, T = big ? 18 : 12, B = big ? 34 : 26;
+
   const times = [...new Set(series.flatMap(s => s.points.map(p => p.ts)))].sort();
   const values = series.flatMap(s => s.points.map(p => p.value));
   const lo = Math.min(...values), hi = Math.max(...values);
-  // Always include a sensible band even when every point is identical.
+  // Always give a sensible band even when every point is identical.
   const pad = (hi - lo) || Math.max(hi * 0.1, 0.01);
   const yMin = Math.max(0, lo - pad * 0.25), yMax = hi + pad * 0.25;
 
@@ -503,104 +542,225 @@ function drawChart(chip, series) {
   let svg = '<svg viewBox="0 0 ' + W + " " + H + '" role="img" aria-label="'
           + chip + ' price over time">';
 
-  // Recessive gridlines with tabular tick labels.
-  [yMax, (yMax + yMin) / 2, yMin].forEach(v => {
-    svg += '<line class="grid" x1="' + L + '" x2="' + (W - R) + '" y1="' + y(v) + '" y2="' + y(v) + '"/>'
-         + '<text class="axis" x="' + (L - 6) + '" y="' + (y(v) + 3.5) + '" text-anchor="end">$'
-         + v.toFixed(v < 1 ? 3 : 2) + "</text>";
+  const ticks = big ? [0, 0.25, 0.5, 0.75, 1] : [0, 0.5, 1];
+  ticks.forEach(f => {
+    const v = yMin + (yMax - yMin) * f;
+    svg += '<line class="grid" x1="' + L + '" x2="' + (W - R) + '" y1="' + y(v)
+         + '" y2="' + y(v) + '"/>'
+         + '<text class="axis" x="' + (L - 6) + '" y="' + (y(v) + 3.5)
+         + '" text-anchor="end">$' + v.toFixed(v < 1 ? 3 : 2) + "</text>";
   });
-  svg += '<line class="base" x1="' + L + '" x2="' + (W - R) + '" y1="' + y(yMin) + '" y2="' + y(yMin) + '"/>';
+  svg += '<line class="base" x1="' + L + '" x2="' + (W - R) + '" y1="' + y(yMin)
+       + '" y2="' + y(yMin) + '"/>';
 
-  [0, times.length - 1].forEach((i, n) => {
-    if (times.length === 1 && n === 1) return;
+  const labelAt = big ? times.map((_, i) => i) : [0, times.length - 1];
+  [...new Set(labelAt)].forEach(i => {
+    const anchor = times.length === 1 ? "middle"
+      : i === 0 ? "start" : i === times.length - 1 ? "end" : "middle";
     svg += '<text class="axis" x="' + x(i) + '" y="' + (H - 8) + '" text-anchor="'
-         + (times.length === 1 ? "middle" : (n === 0 ? "start" : "end")) + '">'
-         + shortDate(times[i]) + "</text>";
+         + anchor + '">' + shortDate(times[i]) + "</text>";
   });
 
   series.forEach(s => {
     const c = colorOf(s.provider);
-    const pts = s.points.map(p => [x(times.indexOf(p.ts)), y(p.value)]);
     // Colour stays with the provider; a dashed line carries the other fact --
     // that this series measures the bare chip rather than a whole machine.
     const dash = s.basis === "accelerator_only" ? ' stroke-dasharray="5 3"' : "";
+    const pts = s.points.map(p => [x(times.indexOf(p.ts)), y(p.value)]);
     if (pts.length > 1) {
-      svg += '<polyline fill="none" stroke="' + c + '" stroke-width="2" stroke-linejoin="round"'
-           + ' stroke-linecap="round"' + dash + ' points="'
-           + pts.map(p => p.join(",")).join(" ") + '"/>';
+      svg += '<polyline fill="none" stroke="' + c + '" stroke-width="2"'
+           + ' stroke-linejoin="round" stroke-linecap="round"' + dash
+           + ' points="' + pts.map(p => p.join(",")).join(" ") + '"/>';
     }
     // A 2px surface ring keeps overlapping markers legible.
     pts.forEach(([px, py], i) => {
       const p = s.points[i];
-      svg += '<circle cx="' + px + '" cy="' + py + '" r="4" fill="' + c
-           + '" stroke="var(--surface-1)" stroke-width="2"'
+      svg += '<circle cx="' + px + '" cy="' + py + '" r="' + (big ? 5 : 4)
+           + '" fill="' + c + '" stroke="var(--surface-1)" stroke-width="2"'
            + ' data-label="' + s.label + '" data-ts="' + p.ts
            + '" data-value="' + p.value + '" data-sku="' + p.sku
            + '" data-region="' + p.region + '"/>';
     });
   });
+
+  if (big) {
+    svg += '<line class="hair hidden" id="crosshair" y1="' + T + '" y2="' + (H - B) + '"/>'
+         + '<rect id="hitzone" x="' + L + '" y="' + T + '" width="' + (W - L - R)
+         + '" height="' + (H - T - B) + '" fill="transparent"/>';
+  }
   svg += "</svg>";
 
   const legend = series.map(s =>
     '<span><i style="background:' + colorOf(s.provider) + '"></i>' + s.label + "</span>").join("");
 
-  const div = document.createElement("div");
-  div.className = "chart";
-  div.innerHTML = "<h3>" + chip + "</h3>"
-                + '<div class="legend">' + legend + "</div>" + svg;
+  const node = document.createElement(big ? "div" : "a");
+  node.className = "chart";
+  if (!big) {
+    // The whole thumbnail is the link into the detail view.
+    node.href = "#chip=" + encodeURIComponent(chip)
+              + "&type=" + encodeURIComponent(state.type)
+              + "&region=" + encodeURIComponent(state.group);
+  }
+  node.innerHTML = (big ? "" : "<h3>" + chip + "</h3>")
+                 + '<div class="legend">' + legend + "</div>" + svg;
 
-  // The tooltip names the SKU behind the number, so "cheapest" stays traceable.
-  div.querySelectorAll("circle").forEach(node => {
-    node.addEventListener("mousemove", e => showTip(
-      "<b>" + chip + "</b> · " + node.dataset.label + "<br>"
-      + shortDate(node.dataset.ts) + " · <b>$"
-      + Number(node.dataset.value).toFixed(2) + "</b> per GPU-hour<br>"
-      + '<span class="muted">' + node.dataset.sku + " · " + node.dataset.region + "</span>", e));
-    node.addEventListener("mouseleave", hideTip);
+  // Per-point tooltip, on both sizes. The SKU behind the number is named so
+  // "cheapest in this region" stays traceable to an actual machine.
+  node.querySelectorAll("circle").forEach(el => {
+    el.addEventListener("mousemove", e => {
+      e.stopPropagation();
+      showTip("<b>" + chip + "</b> · " + el.dataset.label + "<br>"
+        + shortDate(el.dataset.ts) + " · <b>$"
+        + Number(el.dataset.value).toFixed(2) + "</b> per GPU-hour<br>"
+        + '<span class="muted">' + el.dataset.sku + " · " + el.dataset.region + "</span>", e);
+    });
+    el.addEventListener("mouseleave", hideTip);
   });
-  return div;
+
+  if (big) {
+    // Crosshair: reads every series at the nearest snapshot at once, which is
+    // the comparison the detail view exists for.
+    const hair = node.querySelector("#crosshair");
+    const zone = node.querySelector("#hitzone");
+    const svgEl = node.querySelector("svg");
+    zone.addEventListener("mousemove", e => {
+      const box = svgEl.getBoundingClientRect();
+      const vx = (e.clientX - box.left) / box.width * W;
+      let nearest = 0, bestDist = Infinity;
+      times.forEach((_, i) => {
+        const d = Math.abs(x(i) - vx);
+        if (d < bestDist) { bestDist = d; nearest = i; }
+      });
+      hair.classList.remove("hidden");
+      hair.setAttribute("x1", x(nearest));
+      hair.setAttribute("x2", x(nearest));
+      const ts = times[nearest];
+      const lines = series.map(s => {
+        const p = s.points.find(pt => pt.ts === ts);
+        return '<div><i style="background:' + colorOf(s.provider) + '"></i>'
+             + s.label + " · "
+             + (p ? "<b>$" + p.value.toFixed(2) + "</b>"
+                  : '<span class="muted">not sold here</span>') + "</div>";
+      }).join("");
+      showTip("<b>" + shortDate(ts) + "</b>" + lines, e);
+    });
+    zone.addEventListener("mouseleave", () => { hair.classList.add("hidden"); hideTip(); });
+  }
+  return node;
 }
 
-const chartHost = document.getElementById("charts");
+/* ---------- render ---------- */
+function render() {
+  const all = currentRows();
+  document.getElementById("count").textContent =
+    all.length.toLocaleString() + " of " + DATA.rows.length.toLocaleString() + " rows";
 
-// Charts are driven by their own price-type control rather than the table
-// filters, so the table can be explored without the charts moving underfoot.
-const chartTypes = DATA.price_types.filter(t =>
-  Object.values(DATA.charts).some(byType => byType[t]));
-const chartSel = document.getElementById("f-charttype");
-chartTypes.forEach(t => {
-  const o = document.createElement("option");
-  o.value = t; o.textContent = DATA.price_type_labels[t] || t;
-  chartSel.appendChild(o);
-});
-chartSel.value = chartTypes.includes("on_demand") ? "on_demand" : chartTypes[0];
+  DATA.providers.forEach(p => {
+    const rows = all.filter(r => r.provider === p.key).sort(compare);
+    // A provider with nothing in this region is hidden rather than shown empty.
+    document.getElementById("sec-" + p.key).classList.toggle("empty", rows.length === 0);
 
-document.getElementById("chartnote").innerHTML = DATA.snapshots.length > 1
-  ? ""
-  : '<div class="note">Only one snapshot exists so far, so each chart shows a single '
-    + "point. Run <code>collect.py</code> again on a later day and the lines start to draw "
-    + "themselves — this history is the part that cannot be recovered after the fact.</div>";
+    const chips = new Set(rows.filter(r => r.usd_per_gpu_hour !== null && r.chip)
+                              .map(r => r.chip));
+    const regions = new Set(rows.map(r => r.region));
+    document.getElementById("meta-" + p.key).textContent =
+      plural(rows.length, "price") + " · " + plural(chips.size, "chip")
+      + " · " + [...regions].sort().join(", ");
 
-function renderCharts() {
-  const type = chartSel.value;
+    document.getElementById("head-" + p.key).querySelectorAll("th").forEach(th => {
+      th.querySelector(".arrow").textContent =
+        th.dataset.key === sortKey ? (sortDir === 1 ? "▲" : "▼") : "";
+    });
+
+    document.getElementById("body-" + p.key).innerHTML = rows.map(rowHtml).join("");
+    document.getElementById("blanks-" + p.key).innerHTML = blanksHtml(rows, p);
+  });
+
+  const detail = document.getElementById("detail");
+  const overview = document.getElementById("overview-charts");
+
+  if (state.chip) {
+    detail.classList.remove("hidden");
+    overview.classList.add("hidden");
+    document.getElementById("detail-title").textContent = state.chip;
+    document.getElementById("detail-sub").textContent =
+      typeLabel(state.type) + " · " + state.group + " · the cheapest per-GPU-hour each "
+      + "provider lists for this chip in this geography"
+      + (state.type === "" ? ", across every price type" : "")
+      + ". Hover the chart to read every provider at the same date.";
+    const host = document.getElementById("detail-chart");
+    host.innerHTML = "";
+    const series = seriesFor(state.chip);
+    if (series.length) host.appendChild(drawChart(state.chip, series, true));
+    else host.innerHTML = '<p class="muted">No ' + state.chip
+       + " prices in " + state.group + " at this price type.</p>";
+  } else {
+    detail.classList.add("hidden");
+    overview.classList.remove("hidden");
+    renderChartGrid();
+  }
+}
+
+function renderChartGrid() {
   document.getElementById("chartcaption").textContent =
-    "One line per provider, showing the cheapest per-GPU-hour that provider lists for "
-    + "that chip at the " + (DATA.price_type_labels[type] || type).toLowerCase()
-    + " rate. Each provider is drawn from one fixed region ("
-    + Object.entries(DATA.primary_region).map(([k, v]) =>
-        (DATA.provider_labels[k] || k) + " " + v).join(", ")
-    + ") so a line moves only when that region's price moves, not when a cheaper "
-    + "region switches on. Hover a point for the machine behind the number. A dashed "
-    + "line marked “chip only” is a bare accelerator price with vCPU and RAM billed "
-    + "separately — not comparable with the solid lines.";
-  chartHost.innerHTML = "";
+    "One line per provider, showing the cheapest per-GPU-hour it lists for that chip in "
+    + state.group
+    + (state.type === ""
+        ? " at the lowest posted rate of any kind — which mixes spot with committed terms"
+        : " at the " + typeLabel(state.type).toLowerCase() + " rate")
+    + ". Click a chart to open it. A dashed line marked “chip only” is a bare accelerator "
+    + "price with vCPU and RAM billed separately — not comparable with the solid lines.";
+
+  document.getElementById("chartnote").innerHTML = DATA.previous
+    ? ""
+    : '<div class="note">Only one snapshot exists so far, so each chart shows a single '
+      + "point. Run <code>collect.py</code> again on a later day and the lines start to "
+      + "draw themselves — this history is the part that cannot be recovered after the "
+      + "fact.</div>";
+
+  const host = document.getElementById("charts");
+  host.innerHTML = "";
+  let drawn = 0;
   Object.keys(DATA.charts).sort().forEach(chip => {
-    const series = DATA.charts[chip][type];
-    if (series && series.length) chartHost.appendChild(drawChart(chip, series));
+    const series = seriesFor(chip);
+    if (series.length) { host.appendChild(drawChart(chip, series, false)); drawn++; }
   });
+  if (!drawn) {
+    host.innerHTML = '<p class="muted">No chips are priced in ' + state.group
+                   + " at this price type.</p>";
+  }
 }
-chartSel.addEventListener("change", renderCharts);
-renderCharts();
+
+/* ---------- wiring ---------- */
+function syncControls() {
+  document.getElementById("f-chip").value = state.chip;
+  document.getElementById("f-type").value = state.type;
+  document.getElementById("f-region").value = state.group;
+  document.getElementById("f-search").value = state.q;
+}
+
+// Selecting a chip IS opening its detail view, so the toggle and the click
+// target are the same mechanism rather than two ways of doing one thing.
+document.getElementById("f-chip").addEventListener("change", e => {
+  state.chip = e.target.value; writeHash(true); apply();
+});
+document.getElementById("f-type").addEventListener("change", e => {
+  state.type = e.target.value; writeHash(true); apply();
+});
+document.getElementById("f-region").addEventListener("change", e => {
+  state.group = e.target.value; writeHash(true); apply();
+});
+document.getElementById("f-search").addEventListener("input", e => {
+  state.q = e.target.value; writeHash(false); render();
+});
+
+function apply() { syncControls(); render(); }
+
+addEventListener("hashchange", () => { readHash(); apply(); });
+
+readHash();
+writeHash(false);
+apply();
 </script>
 </body>
 </html>

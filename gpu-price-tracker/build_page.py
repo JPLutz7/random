@@ -21,23 +21,89 @@ TEMPLATE = Path(__file__).resolve().parent / "page_template.html"
 
 PROVIDER_LABELS = {"oracle": "Oracle", "azure": "Azure", "gcp": "Google Cloud"}
 
-# The region each provider's table opens on, and the only region its chart line
-# is drawn from. Charting the cheapest region available anywhere would make a
-# line jump the day a cheaper region switches on, which is a supply event
-# rather than a price cut -- exactly the confusion this tracker exists to
-# avoid. One fixed region per provider keeps the trend honest; the tables let
-# any other region be inspected. These three are all US regions, so the
-# cross-provider comparison stays like-for-like.
-PRIMARY_REGION = {
-    "oracle": "all-commercial",   # Oracle's price is uniform worldwide
-    # eastus2 rather than eastus: it is the only Azure region carrying all nine
-    # chips we can resolve -- eastus sells neither H200 nor MI300X, so using it
-    # dropped both from the default view and from the charts entirely. Its
-    # cheapest H100 is identical to eastus ($6.98/GPU-hr), so nothing is
-    # flattered by the switch.
-    "azure": "eastus2",
-    "gcp": "us-central1",
+# ---------------------------------------------------------------------------
+# Geography groups
+# ---------------------------------------------------------------------------
+# A single region control has to mean the same thing for all three providers,
+# and they name regions nothing alike: Azure "eastus2", Google "us-east4",
+# Oracle nothing at all. Picking a raw region name would leave exactly one
+# provider on screen and hide the other two, which defeats the comparison.
+#
+# So regions are grouped by geography, and the toggle selects a geography.
+# Every name below is mapped by hand from the provider's own naming; anything
+# unrecognized falls into "Other" and is reported at build time rather than
+# being guessed into a bucket it might not belong in.
+#
+# Oracle is the special case: it charges one price in every commercial region,
+# so its single pseudo-region belongs to ALL geographies. WORLDWIDE marks it,
+# and the page treats such a row as matching whichever geography is selected.
+WORLDWIDE = "*"
+
+REGION_GROUPS = {
+    "US East": [
+        "eastus", "eastus2", "southeastus", "attatlanta1",
+        "us-east1", "us-east4", "us-east5", "us-east7",
+    ],
+    "US Central": [
+        "centralus", "northcentralus", "southcentralus", "southcentralus2",
+        "westcentralus", "attdallas1",
+        "us-central1", "us-south1",
+    ],
+    "US West": [
+        "westus", "westus2", "westus3",
+        "us-west1", "us-west2", "us-west3", "us-west4", "us-west8",
+    ],
+    "US Government": ["usgovarizona", "usgovvirginia"],
+    "Canada": [
+        "canadacentral", "canadaeast",
+        "northamerica-northeast1", "northamerica-northeast2",
+    ],
+    "Mexico": ["mexicocentral", "northamerica-south1"],
+    "South America": [
+        "brazilsouth", "chilecentral",
+        "southamerica-east1", "southamerica-west1",
+    ],
+    "UK": ["uksouth", "ukwest", "europe-west2"],
+    "Europe": [
+        "northeurope", "westeurope", "francecentral", "francesouth",
+        "germanynorth", "germanywestcentral", "italynorth", "norwayeast",
+        "norwaywest", "polandcentral", "spaincentral", "swedencentral",
+        "switzerlandnorth", "switzerlandwest",
+        "europe-central2", "europe-north1", "europe-southwest1",
+        "europe-west1", "europe-west3", "europe-west4", "europe-west5",
+        "europe-west6", "europe-west8", "europe-west9", "europe-west10",
+        "europe-west12",
+    ],
+    "Middle East": [
+        "israelcentral", "qatarcentral", "uaecentral", "uaenorth",
+        "me-central1", "me-central2", "me-west1",
+    ],
+    "Africa": ["southafricanorth", "southafricawest", "africa-south1"],
+    "India": [
+        "centralindia", "southindia", "jioindiacentral", "jioindiawest",
+        "asia-south1", "asia-south2",
+    ],
+    "Japan": ["japaneast", "japanwest", "asia-northeast1", "asia-northeast2"],
+    "Korea": ["koreacentral", "koreasouth", "asia-northeast3"],
+    "Asia Pacific": [
+        "eastasia", "southeastasia", "indonesiacentral", "malaysiawest",
+        "sgxsingapore1",
+        "asia-east1", "asia-east2", "asia-southeast1", "asia-southeast2",
+    ],
+    "Australia": [
+        "australiacentral", "australiacentral2", "australiaeast",
+        "australiasoutheast",
+        "australia-southeast1", "australia-southeast2",
+    ],
 }
+
+# Flattened for lookup, and the order the toggle lists them in.
+GROUP_ORDER = list(REGION_GROUPS)
+GROUP_BY_REGION = {r: g for g, names in REGION_GROUPS.items() for r in names}
+GROUP_BY_REGION["all-commercial"] = WORLDWIDE   # Oracle, everywhere at once
+
+# The geography the page opens on: all three providers sell GPUs there.
+DEFAULT_GROUP = "US East"
 
 PRICE_TYPE_LABELS = {
     "on_demand": "On-demand",
@@ -70,20 +136,33 @@ def build():
     if not rows:
         raise SystemExit("no snapshots yet -- run  python3 collect.py  first")
 
-    snapshots = sorted({r["snapshot_ts"] for r in rows})
 
     # Each provider is tracked on its own clock rather than one global snapshot.
     # Providers get collected at different moments and can fail independently,
     # so pinning the page to a single latest timestamp would silently drop
     # every provider that was not part of the most recent run.
-    provider_snapshots = defaultdict(set)
+    #
+    # The history is a DAILY series, so a day gets one point however many times
+    # collect.py ran that day -- the last run wins. Without this, testing runs
+    # or a re-run after a failure would put several points on one date, repeat
+    # the date along the x-axis, and make "change since last time" mean "change
+    # in the last few minutes" rather than since yesterday.
+    provider_day_ts = defaultdict(dict)     # provider -> {date: chosen snapshot_ts}
     for row in rows:
-        provider_snapshots[row["provider"]].add(row["snapshot_ts"])
-    provider_latest = {p: max(ts) for p, ts in provider_snapshots.items()}
-    provider_previous = {
-        p: (sorted(ts)[-2] if len(ts) > 1 else None) for p, ts in provider_snapshots.items()
-    }
+        day = row["snapshot_ts"][:10]
+        chosen = provider_day_ts[row["provider"]].get(day)
+        if chosen is None or row["snapshot_ts"] > chosen:
+            provider_day_ts[row["provider"]][day] = row["snapshot_ts"]
 
+    provider_days = {p: sorted(days) for p, days in provider_day_ts.items()}
+    provider_latest = {p: provider_day_ts[p][days[-1]] for p, days in provider_days.items()}
+    provider_previous = {
+        p: (provider_day_ts[p][days[-2]] if len(days) > 1 else None)
+        for p, days in provider_days.items()
+    }
+    # Only the per-day winners count as snapshots anywhere on the page.
+    kept_ts = {ts for chosen in provider_day_ts.values() for ts in chosen.values()}
+    snapshots = sorted(kept_ts)
     latest = max(provider_latest.values())
     previous = max([p for p in provider_previous.values() if p], default=None)
 
@@ -162,32 +241,49 @@ def build():
     # measurements, so they are kept as separate lines. Putting Google's
     # chip-only T4 on the same line as Azure's full-machine T4 would look like
     # a price comparison and be nothing of the kind.
-    best = defaultdict(dict)   # (chip, price_type, provider, basis) -> {ts: (...)}
+    # Series are cut by geography as well, so the region toggle moves the charts
+    # and the tables together. Within a geography the cheapest row wins, which
+    # keeps a line from jumping when a provider opens another datacentre in the
+    # same part of the world.
+    #
+    # The empty-string price type is the "all price types" case: the lowest
+    # posted rate of any kind. It is a real number -- the cheapest way to rent
+    # that chip -- but it mixes spot with committed terms, so the caption says so.
+    best = defaultdict(dict)   # (chip, price_type, group, provider, basis) -> {ts: (...)}
+    unmapped_regions = set()
+
     for row in rows:
         price = to_float(row["usd_per_gpu_hour"])
         if price is None or not row["chip_model"]:
             continue
-        # One region per provider -- see PRIMARY_REGION.
-        if row["region"] != PRIMARY_REGION.get(row["provider"]):
+        # Skip runs superseded by a later one on the same day.
+        if row["snapshot_ts"] not in kept_ts:
+            continue
+        group = GROUP_BY_REGION.get(row["region"])
+        if group is None:
+            unmapped_regions.add(row["region"])
             continue
         basis = row.get("basis", "")
-        bucket = best[(row["chip_model"], row["price_type"], row["provider"], basis)]
-        current = bucket.get(row["snapshot_ts"])
-        if current is None or price < current[0]:
-            bucket[row["snapshot_ts"]] = (price, row["sku_name"], row["region"])
+        chip, provider = row["chip_model"], row["provider"]
+        day = row["snapshot_ts"][:10]
+        for price_type in (row["price_type"], ""):
+            bucket = best[(chip, price_type, group, provider, basis)]
+            current = bucket.get(day)
+            if current is None or price < current[0]:
+                bucket[day] = (price, row["sku_name"], row["region"])
 
-    charts = defaultdict(lambda: defaultdict(list))
-    for (chip, price_type, provider, basis), by_ts in best.items():
+    charts = defaultdict(lambda: defaultdict(lambda: defaultdict(list)))
+    for (chip, price_type, group, provider, basis), by_ts in best.items():
         label = PROVIDER_LABELS.get(provider, provider)
         if basis == "accelerator_only":
             label += " (chip only)"
-        charts[chip][price_type].append({
+        charts[chip][price_type][group].append({
             "provider": provider,
             "label": label,
             "basis": basis,
             "points": [
-                {"ts": ts, "value": v, "sku": sku, "region": region}
-                for ts, (v, sku, region) in sorted(by_ts.items())
+                {"ts": day, "value": v, "sku": sku, "region": region}
+                for day, (v, sku, region) in sorted(by_ts.items())
             ],
         })
 
@@ -207,7 +303,6 @@ def build():
         own = [r for r in latest_rows if r["provider"] == key]
         priced_rows = [r for r in own if r["usd_per_gpu_hour"] is not None]
         regions = sorted({r["region"] for r in own})
-        primary = PRIMARY_REGION.get(key)
         provider_blocks.append({
             "key": key,
             "label": PROVIDER_LABELS.get(key, key),
@@ -217,9 +312,6 @@ def build():
             "priced_count": len(priced_rows),
             "chips": sorted({r["chip"] for r in priced_rows if r["chip"]}),
             "regions": regions,
-            # Each provider names its regions differently, so the selector
-            # belongs to the section rather than the page-wide filter bar.
-            "default_region": primary if primary in regions else (regions[0] if regions else ""),
             "price_types": [t for t in price_types_present
                             if any(r["price_type"] == t for r in own)],
             "unpriced": [u for u in unpriced.values() if u["provider"] == key],
@@ -234,7 +326,11 @@ def build():
         "provider_latest": provider_latest,
         "provider_labels": PROVIDER_LABELS,
         "providers": provider_blocks,
-        "primary_region": PRIMARY_REGION,
+        "group_by_region": GROUP_BY_REGION,
+        "group_order": [g for g in GROUP_ORDER
+                        if any(GROUP_BY_REGION.get(r["region"]) == g for r in latest_rows)],
+        "default_group": DEFAULT_GROUP,
+        "worldwide": WORLDWIDE,
         "price_type_labels": PRICE_TYPE_LABELS,
         "price_types": price_types_present,
         "rows": latest_rows,
@@ -250,6 +346,14 @@ def build():
     storage.DOCS_DIR.mkdir(parents=True, exist_ok=True)
     out = storage.DOCS_DIR / "index.html"
     out.write_text(html, encoding="utf-8")
+
+    stray = sorted({r["region"] for r in latest_rows
+                    if r["region"] not in GROUP_BY_REGION})
+    if stray:
+        print(f"WARNING: {len(stray)} region(s) not in the geography map, so they "
+              f"are absent from the region toggle. Add them to REGION_GROUPS:")
+        for name in stray:
+            print(f"           {name}")
 
     priced = sum(1 for r in latest_rows if r["usd_per_gpu_hour"] is not None)
     print(f"{len(snapshots)} snapshot(s), latest {latest}")

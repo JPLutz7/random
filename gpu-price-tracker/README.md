@@ -227,42 +227,46 @@ and rebuild the page.
 
 ## How the page is laid out
 
-The page is organised by hyperscaler:
+**Three toggles run everything** — chip, price type and region. They apply to
+every table and every chart at once; there is no second set of controls
+anywhere. A search box narrows by SKU name on top of them.
 
-1. **A card per provider** — how many of its prices were normalized, how many
-   chips that covers, when this tracker pulled it, and the freshness date the
-   provider states for itself. Click a card to jump to that provider.
-2. **A section per provider** — its own sortable table, its own region, and its
-   own list of SKUs left blank, collapsed by default. Attributing the blanks to
-   the provider that produced them matters: in one flat list, 64 unrecognized
-   SKUs read as a single failure rather than three separate and quite different
-   ones. Each table scrolls inside its own box, so a provider with hundreds of
-   rows does not push the others off the screen.
-3. **Charts, across providers** — this is the one place the providers are
-   deliberately mixed, because comparing them over time is the point. One line
-   per provider per chip, showing the cheapest per-GPU-hour it lists, with its
-   own price-type selector.
+The state lives in the URL, so the back button works and any view can be
+bookmarked or shared.
 
-Each provider's table opens on one region and has its own region picker in the
-section heading — the providers name their regions differently, so a page-wide
-region filter would be meaningless. The charts are pinned to one fixed region
-per provider (`PRIMARY_REGION` in `build_page.py`): Oracle `all-commercial`,
-Azure `eastus2`, Google `us-central1`. Drawing the cheapest region available
-anywhere would make a line jump the day a cheaper region switches on, which is a
-supply event rather than a price cut.
+**Region is a geography, not a raw region name.** The providers name regions
+nothing alike — Azure `eastus2`, Google `us-east4`, Oracle not at all — so
+picking a raw name would leave one provider on screen and hide the other two.
+Regions are grouped into geographies (`REGION_GROUPS` in `build_page.py`) and
+the toggle selects one. Oracle charges the same price everywhere, so its rows
+belong to every geography rather than none.
 
-Azure's `eastus2` is used rather than `eastus` because it is the only Azure
-region carrying all nine resolvable chips — `eastus` sells neither H200 nor
-MI300X. Its cheapest H100 is identical to `eastus`, so nothing is flattered by
-the choice.
+**Two views:**
 
-The filters at the top apply to every section at once, and a provider filtered
-down to nothing is hidden rather than shown empty. Sorting is shared across the
-sections, so clicking a column heading sorts all three the same way and the
-numbers stay readable straight down the page.
+1. **Overview** (no chip selected) — a card per hyperscaler, then a section per
+   hyperscaler with its own sortable table and its own collapsed list of SKUs
+   left blank, then a grid of small per-chip charts.
+2. **Detail** (a chip selected) — one large interactive chart for that chip with
+   a crosshair that reads every provider at the same date, above the same
+   provider tables narrowed to that chip.
 
-Each provider keeps a fixed colour — in its card, its section heading, and its
-chart line — so the same hyperscaler is recognisable wherever it appears.
+Clicking a chart in the overview *is* selecting that chip, so the toggle and the
+click are one mechanism rather than two ways of doing the same thing.
+
+Charts show one line per provider: the cheapest per-GPU-hour it lists for that
+chip in the selected geography. Picking the cheapest *within* a geography keeps
+a line from jumping when a provider opens another datacentre nearby. With "all
+price types" selected, the line is the lowest posted rate of any kind — a real
+number, but one that mixes spot with committed terms, and the caption says so.
+
+**The history is daily.** However many times `collect.py` runs in a day, that
+day gets one point — the last run wins. Otherwise a re-run after a failure would
+put several points on one date and make "change since last time" mean "change in
+the last few minutes".
+
+Each provider keeps a fixed colour across its card, its section heading and its
+chart line. A dashed line marked "chip only" is a bare accelerator price, not
+comparable with the solid lines.
 
 The page's data is embedded directly inside `docs/index.html` rather than
 loaded from a separate file, because browsers block a local page from reading
