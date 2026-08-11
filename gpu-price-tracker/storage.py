@@ -49,6 +49,18 @@ COLUMNS = [
     #                        it, so such a row is NOT comparable to the others
     # Kept as its own field so the page can never compare the two by accident.
     "basis",
+    # When the provider says this price took effect, and when it stopped.
+    # Azure publishes both, which is what lets history be reconstructed back to
+    # 2018 from a single pull -- a row saying "$98.32 effective from 2023-12-01"
+    # is the provider stating the price on every day since.
+    #
+    # Google and Oracle are BLANK here on purpose. Google's effectiveTime is
+    # today's date on all 32,242 SKUs and Oracle's lastUpdated is one stamp for
+    # the whole feed, so both are "when we recomputed this", not "when this
+    # price took effect". Treating either as a validity date would invent a
+    # price change on the day we happened to look.
+    "effective_from",
+    "effective_to",      # blank means still in effect
     "notes",
 ]
 

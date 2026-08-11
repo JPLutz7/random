@@ -176,8 +176,19 @@ def build():
     latest_rows, unpriced = [], {}
     provider_last_updated = {}
 
+    today = latest[:10]
+
+    def in_force(row, on_day):
+        """A row whose validity window has not closed by `on_day`."""
+        ends = row.get("effective_to", "")
+        return not ends or ends >= on_day
+
     for row in rows:
         if row["snapshot_ts"] != provider_latest[row["provider"]]:
+            continue
+        # Superseded rows are kept in the archive for their history, but a
+        # retired price is not today's price, so the tables skip them.
+        if not in_force(row, today):
             continue
         # Oracle stamps the whole feed; Azure stamps each row. Keeping the most
         # recent value gives the freshest date the provider itself vouches for.
@@ -249,31 +260,93 @@ def build():
     # The empty-string price type is the "all price types" case: the lowest
     # posted rate of any kind. It is a real number -- the cheapest way to rent
     # that chip -- but it mixes spot with committed terms, so the caption says so.
-    best = defaultdict(dict)   # (chip, price_type, group, provider, basis) -> {ts: (...)}
+    # Two sources of history, and they are not the same thing:
+    #
+    #   OBSERVED  -- what this tracker saw on a day it ran. The only source for
+    #                Google and Oracle, who publish today's price and nothing else.
+    #   STATED    -- what Azure says its own price was. Every Azure row carries
+    #                the window its price was in force for, reaching back to
+    #                2018, so a single pull yields years of history.
+    #
+    # Stated history is the provider's own claim rather than something this
+    # tracker witnessed, so points are tagged and the page draws the two
+    # differently. It is not a guess -- but it is Azure's word, not a
+    # measurement, and the distinction is worth keeping visible.
+    best = defaultdict(dict)     # key -> {day: (price, sku, region, stated)}
+    intervals = defaultdict(list)  # key -> [(from, to, price, sku, region)]
     unmapped_regions = set()
+
+    def chart_keys(row, group):
+        chip, provider, basis = row["chip_model"], row["provider"], row.get("basis", "")
+        for price_type in (row["price_type"], ""):
+            yield (chip, price_type, group, provider, basis)
 
     for row in rows:
         price = to_float(row["usd_per_gpu_hour"])
         if price is None or not row["chip_model"]:
             continue
-        # Skip runs superseded by a later one on the same day.
-        if row["snapshot_ts"] not in kept_ts:
-            continue
         group = GROUP_BY_REGION.get(row["region"])
         if group is None:
             unmapped_regions.add(row["region"])
             continue
-        basis = row.get("basis", "")
-        chip, provider = row["chip_model"], row["provider"]
-        day = row["snapshot_ts"][:10]
-        for price_type in (row["price_type"], ""):
-            bucket = best[(chip, price_type, group, provider, basis)]
-            current = bucket.get(day)
-            if current is None or price < current[0]:
-                bucket[day] = (price, row["sku_name"], row["region"])
+
+        starts = row.get("effective_from", "")
+        if starts and row["snapshot_ts"] == provider_latest[row["provider"]]:
+            # Stated history. Taken from the newest pull only -- it already
+            # contains every window the provider still publishes, so older
+            # pulls would just repeat it.
+            ends = row.get("effective_to", "") or "9999-12-31"
+            for key in chart_keys(row, group):
+                intervals[key].append((starts, ends, price, row["sku_name"], row["region"]))
+
+        # Observed history, from the day's winning run, current prices only.
+        if row["snapshot_ts"] in kept_ts:
+            day = row["snapshot_ts"][:10]
+            if in_force(row, day):
+                for key in chart_keys(row, group):
+                    current = best[key].get(day)
+                    if current is None or price < current[0]:
+                        best[key][day] = (price, row["sku_name"], row["region"], False)
+
+    # Every date on which any stated price started, plus every day we ran.
+    # These become the candidate x positions; a series only emits a point where
+    # its own value actually changes.
+    observed_days = sorted({ts[:10] for ts in kept_ts})
+    asof_dates = sorted({start for spans in intervals.values() for start, *_ in spans}
+                        | set(observed_days))
+
+    def stated_series(spans):
+        """Cheapest price in force on each as-of date, as a step function."""
+        points = []
+        for day in asof_dates:
+            live = [(v, sku, region) for start, ends, v, sku, region in spans
+                    if start <= day <= ends]
+            if not live:
+                continue
+            value, sku, region = min(live)
+            # Only emit where the value moves; a step function needs its
+            # corners, not a point per candidate date.
+            if points and abs(points[-1][1] - value) < 1e-9:
+                continue
+            points.append((day, value, sku, region))
+        return points
 
     charts = defaultdict(lambda: defaultdict(lambda: defaultdict(list)))
-    for (chip, price_type, group, provider, basis), by_ts in best.items():
+    for key in set(intervals) | set(best):
+        chip, price_type, group, provider, basis = key
+        spans = intervals.get(key)
+        if spans:
+            raw = [(d, v, sku, reg, d not in best[key]) for d, v, sku, reg in stated_series(spans)]
+            # Anchor the line at today so a price unchanged for years still
+            # draws a line rather than a single point in 2023.
+            if raw and raw[-1][0] != today:
+                last = raw[-1]
+                raw.append((today, last[1], last[2], last[3], False))
+        else:
+            raw = [(d, v, sku, reg, False)
+                   for d, (v, sku, reg, _) in sorted(best[key].items())]
+        if not raw:
+            continue
         label = PROVIDER_LABELS.get(provider, provider)
         if basis == "accelerator_only":
             label += " (chip only)"
@@ -282,8 +355,8 @@ def build():
             "label": label,
             "basis": basis,
             "points": [
-                {"ts": day, "value": v, "sku": sku, "region": region}
-                for day, (v, sku, region) in sorted(by_ts.items())
+                {"ts": d, "value": round(v, 6), "sku": sku, "region": reg, "stated": stated}
+                for d, v, sku, reg, stated in raw
             ],
         })
 
@@ -331,6 +404,10 @@ def build():
                         if any(GROUP_BY_REGION.get(r["region"]) == g for r in latest_rows)],
         "default_group": DEFAULT_GROUP,
         "worldwide": WORLDWIDE,
+        # The first day this tracker actually ran. Anything before it on a
+        # chart is the provider's stated history, not something we witnessed.
+        "observed_from": min(ts[:10] for ts in kept_ts),
+        "today": today,
         "price_type_labels": PRICE_TYPE_LABELS,
         "price_types": price_types_present,
         "rows": latest_rows,

@@ -54,23 +54,42 @@ RESERVATION_TERM_HOURS = {
 }
 
 # ---------------------------------------------------------------------------
-# TRAP 2: the preview API returns superseded prices alongside current ones
+# TRAP 2, which turned out to be the best thing in the feed
 # ---------------------------------------------------------------------------
 # The same meterId comes back several times with different effective windows.
 # Meter 000a689e... carries both a row effective 2026-04-01 to 2026-07-31 at
 # $6.2616 and a row effective from 2026-08-01 with no end date at $5.785718.
-# Both are "real"; only the second is today's price. Keeping every row would
-# silently record a stale price and invent a price change that never happened.
+# Mistaking the retired one for today's price reports a stale number, so the
+# two must be told apart -- that is what effective_to is for downstream.
 #
-# A row counts as current when it has already started and has not yet ended.
-def _is_current(item, now_iso):
+# But these rows are not noise to be dropped. Every row states the window its
+# price was in force for, and those windows reach back to 2018. A row reading
+# "$98.32 effective from 2023-12-01, no end date" is Azure stating its own
+# price on every day since December 2023. Cloud providers are supposed to
+# publish only today's price; Azure quietly publishes years of it.
+#
+# So all rows are kept, each carrying its window, and the page reconstructs a
+# step function from them. Rows that have not started yet are still dropped --
+# a future-dated price is not history.
+def _has_started(item, now_iso):
     start = item.get("effectiveStartDate")
-    end = item.get("effectiveEndDate")
-    if start and start > now_iso:
-        return False
-    if end and end <= now_iso:
-        return False
-    return True
+    return not (start and start > now_iso)
+
+
+# A handful of rows come back with a window that ends BEFORE it begins -- e.g.
+# effective from 2026-08-01 to 2026-07-31, usually at a placeholder price like
+# $0.002 or $0.01. Forty such rows are in the current pull, all on A10 and T4
+# machines. They look like retired prices whose start date was rolled forward
+# while the old end date stayed behind.
+#
+# No day falls inside such a window, so they can never be a real price. Left in,
+# they sort to the front of a SKU's history and make a $0.01 placeholder look
+# like the price before a 85,000% increase. Dropped here rather than downstream,
+# so no consumer of the archive has to know about them.
+def _window_is_impossible(item):
+    start = (item.get("effectiveStartDate") or "")[:10]
+    end = (item.get("effectiveEndDate") or "")[:10]
+    return bool(start and end and end < start)
 
 
 # ---------------------------------------------------------------------------
@@ -301,7 +320,9 @@ def normalize(payload, snapshot_ts):
     for pages in payload.values():
         for page in pages:
             for item in page.get("Items", []):
-                if _is_excluded(item) or not _is_current(item, now_iso):
+                if _is_excluded(item) or not _has_started(item, now_iso):
+                    continue
+                if _window_is_impossible(item):
                     continue
 
                 # Read the region from the row, not from the archive's key, so
@@ -349,6 +370,10 @@ def normalize(payload, snapshot_ts):
                         # An Azure row is the price of an entire VM, so vCPU and
                         # RAM are already included before the division.
                         "basis": "machine_inclusive" if gpu_count else "",
+                        # The window this price was in force for. Blank end date
+                        # means it still is.
+                        "effective_from": (item.get("effectiveStartDate") or "")[:10],
+                        "effective_to": (item.get("effectiveEndDate") or "")[:10],
                         "notes": note,
                     })
 

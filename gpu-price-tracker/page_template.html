@@ -530,13 +530,18 @@ function drawChart(chip, series, big) {
   const times = [...new Set(series.flatMap(s => s.points.map(p => p.ts)))].sort();
   const values = series.flatMap(s => s.points.map(p => p.value));
   const lo = Math.min(...values), hi = Math.max(...values);
-  // Always give a sensible band even when every point is identical.
   const pad = (hi - lo) || Math.max(hi * 0.1, 0.01);
   const yMin = Math.max(0, lo - pad * 0.25), yMax = hi + pad * 0.25;
 
-  const x = i => times.length === 1
+  // The x-axis is a real time scale, not one slot per point. Stated history
+  // reaches back years while the observed points are days apart, and spacing
+  // those evenly would draw a 32-month gap the same width as an overnight one.
+  const ms = d => Date.parse(d + "T00:00:00Z");
+  const tMin = ms(times[0]), tMax = ms(times[times.length - 1]);
+  const span = tMax - tMin;
+  const x = d => span === 0
     ? (L + W - R) / 2
-    : L + (W - L - R) * (i / (times.length - 1));
+    : L + (W - L - R) * ((ms(d) - tMin) / span);
   const y = v => T + (H - T - B) * (1 - (v - yMin) / (yMax - yMin || 1));
 
   let svg = '<svg viewBox="0 0 ' + W + " " + H + '" role="img" aria-label="'
@@ -553,12 +558,21 @@ function drawChart(chip, series, big) {
   svg += '<line class="base" x1="' + L + '" x2="' + (W - R) + '" y1="' + y(yMin)
        + '" y2="' + y(yMin) + '"/>';
 
-  const labelAt = big ? times.map((_, i) => i) : [0, times.length - 1];
-  [...new Set(labelAt)].forEach(i => {
-    const anchor = times.length === 1 ? "middle"
-      : i === 0 ? "start" : i === times.length - 1 ? "end" : "middle";
-    svg += '<text class="axis" x="' + x(i) + '" y="' + (H - 8) + '" text-anchor="'
-         + anchor + '">' + shortDate(times[i]) + "</text>";
+  // Where this tracker's own record begins. Everything left of it is the
+  // provider's stated history rather than something we watched happen.
+  const obs = DATA.observed_from;
+  if (big && span > 0 && ms(obs) > tMin && ms(obs) <= tMax) {
+    svg += '<line class="hair" x1="' + x(obs) + '" x2="' + x(obs) + '" y1="' + T
+         + '" y2="' + (H - B) + '"/>'
+         + '<text class="axis" x="' + (x(obs) - 5) + '" y="' + (T + 10)
+         + '" text-anchor="end">stated ← | → observed</text>';
+  }
+
+  const ends = [times[0], times[times.length - 1]];
+  [...new Set(ends)].forEach((d, i, arr) => {
+    svg += '<text class="axis" x="' + x(d) + '" y="' + (H - 8) + '" text-anchor="'
+         + (arr.length === 1 ? "middle" : i === 0 ? "start" : "end") + '">'
+         + d + "</text>";
   });
 
   series.forEach(s => {
@@ -566,20 +580,31 @@ function drawChart(chip, series, big) {
     // Colour stays with the provider; a dashed line carries the other fact --
     // that this series measures the bare chip rather than a whole machine.
     const dash = s.basis === "accelerator_only" ? ' stroke-dasharray="5 3"' : "";
-    const pts = s.points.map(p => [x(times.indexOf(p.ts)), y(p.value)]);
-    if (pts.length > 1) {
-      svg += '<polyline fill="none" stroke="' + c + '" stroke-width="2"'
+    // A list price is a step function: it holds until the day it changes.
+    // Sloping between two known prices would draw a gradual drift that never
+    // happened.
+    if (s.points.length > 1) {
+      let d = "M" + x(s.points[0].ts) + "," + y(s.points[0].value);
+      for (let i = 1; i < s.points.length; i++) {
+        d += " L" + x(s.points[i].ts) + "," + y(s.points[i - 1].value)
+           + " L" + x(s.points[i].ts) + "," + y(s.points[i].value);
+      }
+      svg += '<path fill="none" stroke="' + c + '" stroke-width="2"'
            + ' stroke-linejoin="round" stroke-linecap="round"' + dash
-           + ' points="' + pts.map(p => p.join(",")).join(" ") + '"/>';
+           + ' d="' + d + '"/>';
     }
-    // A 2px surface ring keeps overlapping markers legible.
-    pts.forEach(([px, py], i) => {
-      const p = s.points[i];
-      svg += '<circle cx="' + px + '" cy="' + py + '" r="' + (big ? 5 : 4)
-           + '" fill="' + c + '" stroke="var(--surface-1)" stroke-width="2"'
-           + ' data-label="' + s.label + '" data-ts="' + p.ts
+    s.points.forEach(p => {
+      // Filled marker = we saw this price on that day. Hollow = the provider
+      // says this was its price then. Same fact, different standing.
+      const r = big ? 5 : 4;
+      svg += p.stated
+        ? '<circle cx="' + x(p.ts) + '" cy="' + y(p.value) + '" r="' + (r - 1)
+          + '" fill="var(--surface-1)" stroke="' + c + '" stroke-width="2"'
+        : '<circle cx="' + x(p.ts) + '" cy="' + y(p.value) + '" r="' + r
+          + '" fill="' + c + '" stroke="var(--surface-1)" stroke-width="2"';
+      svg += ' data-label="' + s.label + '" data-ts="' + p.ts
            + '" data-value="' + p.value + '" data-sku="' + p.sku
-           + '" data-region="' + p.region + '"/>';
+           + '" data-region="' + p.region + '" data-stated="' + p.stated + '"/>';
     });
   });
 
@@ -591,12 +616,15 @@ function drawChart(chip, series, big) {
   svg += "</svg>";
 
   const legend = series.map(s =>
-    '<span><i style="background:' + colorOf(s.provider) + '"></i>' + s.label + "</span>").join("");
+    '<span><i style="background:' + colorOf(s.provider) + '"></i>' + s.label + "</span>").join("")
+    + (series.some(s => s.points.some(p => p.stated))
+        ? '<span class="muted" title="A hollow marker is a price the provider states for that '
+          + 'date. A filled one is a price this tracker saw on the day.">○ stated · ● observed</span>'
+        : "");
 
   const node = document.createElement(big ? "div" : "a");
   node.className = "chart";
   if (!big) {
-    // The whole thumbnail is the link into the detail view.
     node.href = "#chip=" + encodeURIComponent(chip)
               + "&type=" + encodeURIComponent(state.type)
               + "&region=" + encodeURIComponent(state.group);
@@ -604,45 +632,48 @@ function drawChart(chip, series, big) {
   node.innerHTML = (big ? "" : "<h3>" + chip + "</h3>")
                  + '<div class="legend">' + legend + "</div>" + svg;
 
-  // Per-point tooltip, on both sizes. The SKU behind the number is named so
-  // "cheapest in this region" stays traceable to an actual machine.
   node.querySelectorAll("circle").forEach(el => {
     el.addEventListener("mousemove", e => {
       e.stopPropagation();
       showTip("<b>" + chip + "</b> · " + el.dataset.label + "<br>"
-        + shortDate(el.dataset.ts) + " · <b>$"
-        + Number(el.dataset.value).toFixed(2) + "</b> per GPU-hour<br>"
-        + '<span class="muted">' + el.dataset.sku + " · " + el.dataset.region + "</span>", e);
+        + el.dataset.ts + " · <b>$" + Number(el.dataset.value).toFixed(2)
+        + "</b> per GPU-hour<br>"
+        + '<span class="muted">' + el.dataset.sku + " · " + el.dataset.region + "<br>"
+        + (el.dataset.stated === "true"
+            ? "price the provider states for this date"
+            : "observed by this tracker on the day") + "</span>", e);
     });
     el.addEventListener("mouseleave", hideTip);
   });
 
   if (big) {
-    // Crosshair: reads every series at the nearest snapshot at once, which is
-    // the comparison the detail view exists for.
+    // Crosshair: reads every series at the same date, which is the comparison
+    // the detail view exists for.
     const hair = node.querySelector("#crosshair");
     const zone = node.querySelector("#hitzone");
     const svgEl = node.querySelector("svg");
     zone.addEventListener("mousemove", e => {
       const box = svgEl.getBoundingClientRect();
       const vx = (e.clientX - box.left) / box.width * W;
-      let nearest = 0, bestDist = Infinity;
-      times.forEach((_, i) => {
-        const d = Math.abs(x(i) - vx);
-        if (d < bestDist) { bestDist = d; nearest = i; }
+      let nearest = times[0], bestDist = Infinity;
+      times.forEach(d => {
+        const dist = Math.abs(x(d) - vx);
+        if (dist < bestDist) { bestDist = dist; nearest = d; }
       });
       hair.classList.remove("hidden");
       hair.setAttribute("x1", x(nearest));
       hair.setAttribute("x2", x(nearest));
-      const ts = times[nearest];
       const lines = series.map(s => {
-        const p = s.points.find(pt => pt.ts === ts);
+        // The value in force on that date, which for a step function is the
+        // last point at or before it.
+        let live = null;
+        s.points.forEach(p => { if (p.ts <= nearest) live = p; });
         return '<div><i style="background:' + colorOf(s.provider) + '"></i>'
              + s.label + " · "
-             + (p ? "<b>$" + p.value.toFixed(2) + "</b>"
-                  : '<span class="muted">not sold here</span>') + "</div>";
+             + (live ? "<b>$" + live.value.toFixed(2) + "</b>"
+                     : '<span class="muted">no price yet</span>') + "</div>";
       }).join("");
-      showTip("<b>" + shortDate(ts) + "</b>" + lines, e);
+      showTip("<b>" + nearest + "</b>" + lines, e);
     });
     zone.addEventListener("mouseleave", () => { hair.classList.add("hidden"); hideTip(); });
   }
@@ -687,7 +718,9 @@ function render() {
       typeLabel(state.type) + " · " + state.group + " · the cheapest per-GPU-hour each "
       + "provider lists for this chip in this geography"
       + (state.type === "" ? ", across every price type" : "")
-      + ". Hover the chart to read every provider at the same date.";
+      + ". Hover the chart to read every provider at the same date. Left of the marked line "
+      + "the price is what the provider states for that date; right of it, what this tracker "
+      + "recorded on the day.";
     const host = document.getElementById("detail-chart");
     host.innerHTML = "";
     const series = seriesFor(state.chip);
@@ -708,8 +741,12 @@ function renderChartGrid() {
     + (state.type === ""
         ? " at the lowest posted rate of any kind — which mixes spot with committed terms"
         : " at the " + typeLabel(state.type).toLowerCase() + " rate")
-    + ". Click a chart to open it. A dashed line marked “chip only” is a bare accelerator "
-    + "price with vCPU and RAM billed separately — not comparable with the solid lines.";
+    + ". Click a chart to open it. Lines are drawn as steps because a list price holds until "
+    + "the day it changes. A step DOWN can mean a price cut or a cheaper machine arriving — "
+    + "the tooltip names the machine behind each point. Hollow markers are prices the provider "
+    + "states for a past date; filled markers are prices this tracker saw on the day. A dashed "
+    + "line marked “chip only” is a bare accelerator price with vCPU and RAM billed separately "
+    + "— not comparable with the solid lines.";
 
   document.getElementById("chartnote").innerHTML = DATA.previous
     ? ""

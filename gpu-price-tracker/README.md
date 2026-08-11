@@ -7,6 +7,9 @@ Cloud providers publish today's prices but not yesterday's, so no public price
 history exists. **The archive is the point.** The page is the visible part, but
 the reason to run this daily is that a day not collected is a day gone for good.
 
+That premise turns out to be *almost* true — see [How much history there
+is](#how-much-history-there-is). Azure quietly publishes years of its own.
+
 AWS is deliberately excluded. Meta publishes no rate card, so there is nothing
 to pull.
 
@@ -71,6 +74,58 @@ every region was *already* in the raw archive and was simply being filtered out.
 Widening it cost no extra requests and reprocessed the existing history.
 
 A full run takes about 70 seconds and stores ~3.4 MB, so roughly 1.2 GB a year.
+
+## How much history there is
+
+Two different things, and the page keeps them apart:
+
+| | source | reaches back to |
+|---|---|---|
+| **Azure** | **stated by Azure in its own feed** | **2018-09-04** |
+| Google Cloud | observed by this tracker | the day you started |
+| Oracle | observed by this tracker | the day you started |
+
+**Azure publishes its own price history and it is easy to miss.** Every row
+carries the window its price was in force for — `effectiveStartDate` and
+`effectiveEndDate`. A row reading *"$98.32, effective from 2023-12-01, no end
+date"* is Azure stating its own price on every day since December 2023. One pull
+therefore yields years of history, reconstructed as a step function.
+
+How far back each chip reaches, in Azure's US East:
+
+| chip | since | | chip | since |
+|---|---|---|---|---|
+| V100 | 2018-09-04 | | H100 | 2023-12-01 |
+| T4 | 2020-11-01 | | H200, GB200 | 2025-04-01 |
+| A100 | 2021-03-01 | | MI300X | 2025-10-01 |
+| A10 | 2022-04-01 | | RTX PRO 6000 | 2026-04-01 |
+
+**Google and Oracle genuinely publish nothing.** Google's `effectiveTime` reads
+today's date on all 32,242 SKUs and Oracle has a single feed-level
+`lastUpdated`; both mean "when we recomputed this", not "when this price took
+effect". Treating either as a validity date would invent a price change on the
+day you happened to look, so both are left blank and their history starts when
+you start collecting.
+
+**Stated is not the same as observed**, and the page never blurs them. A hollow
+marker is a price the provider *says* applied on that date; a filled marker is
+one this tracker *saw* on the day. The detail chart draws a line where the
+record changes hands. Stated history is not a guess — but it is Azure's word
+rather than a measurement, and it can be revised. Observed history cannot.
+
+Lines are drawn as **steps**, because a list price holds until the day it
+changes; sloping between two known prices would draw a gradual drift that never
+happened. A step *down* can mean a price cut **or** a cheaper machine arriving —
+the tooltip names the machine behind every point so the two can be told apart.
+
+### What the reconstructed history says so far
+
+Azure retains one superseded period per meter, so it shows both sides of its
+most recent repricing. Across 386 same-SKU/region/price-type changes:
+
+- **214 decreases, 132 increases, 40 unchanged — median −7.6%**
+- every one of them took effect on **2026-08-01**, a single repricing event
+- for 30 of them it was the first change since **2023-05-01**
 
 ## The number the page shows
 
@@ -150,9 +205,15 @@ a row preemptible; the wording is just wording.
 **Azure superseded prices.** *(not in the original brief — found while
 building)* The preview API returns retired price rows next to current ones. One
 meter came back both as effective 2026-04-01 to 2026-07-31 at $6.2616 and as
-effective from 2026-08-01 with no end date at $5.785718. Keeping both would
-record a stale price and invent a price change that never happened. Only rows
-that have started and not yet ended are kept.
+effective from 2026-08-01 with no end date at $5.785718. Mistaking the retired
+one for today's price reports a stale number, so the tables show only rows still
+in force — but the retired rows are kept, because they are the history.
+
+**Azure windows that end before they begin.** Forty rows come back effective
+*from* 2026-08-01 *to* 2026-07-31, usually at a placeholder price like $0.002.
+No day falls inside such a window, so they can never be a real price. Left in,
+they sort to the front of a SKU's history and turn a $0.01 placeholder into the
+"price before" an 85,000% increase. Dropped in `providers/azure.py`.
 
 ## Adding a machine the tracker does not recognize
 
